@@ -1,17 +1,38 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/lib/auth";
 import AuthPage from "@/pages/auth-page";
 import DashboardPage from "@/pages/dashboard-page";
 import NotFound from "@/pages/not-found";
+
+function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl">লোড হচ্ছে...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={AuthPage} />
-      <Route path="/dashboard" component={DashboardPage} />
+      <Route path="/dashboard">
+        {() => <ProtectedRoute component={DashboardPage} />}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -20,10 +41,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

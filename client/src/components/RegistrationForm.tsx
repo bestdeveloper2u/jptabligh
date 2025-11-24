@@ -1,14 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import GlassCard from "./GlassCard";
+import type { Thana, Union, Mosque } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 interface RegistrationFormProps {
   onSubmit?: (data: any) => void;
   onLoginClick?: () => void;
+  isLoading?: boolean;
 }
 
 const tabligActivities = [
@@ -20,32 +24,76 @@ const tabligActivities = [
   { id: "dos-din", label: "১০ দিনের সাথী" },
 ];
 
-export default function RegistrationForm({ onSubmit, onLoginClick }: RegistrationFormProps) {
+export default function RegistrationForm({ onSubmit, onLoginClick, isLoading }: RegistrationFormProps) {
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
     password: "",
     confirmPassword: "",
-    thana: "",
-    union: "",
-    mosque: "",
-    activities: [] as string[],
+    thanaId: "",
+    unionId: "",
+    mosqueId: "",
+    tabligActivities: [] as string[],
   });
+
+  // Fetch thanas
+  const { data: thanasData } = useQuery<{ thanas: Thana[] }>({
+    queryKey: ["/api/thanas"],
+  });
+
+  // Fetch unions based on selected thana
+  const { data: unionsData } = useQuery<{ unions: Union[] }>({
+    queryKey: ["/api/unions", { thanaId: formData.thanaId }],
+    enabled: !!formData.thanaId,
+  });
+
+  // Fetch mosques based on selected thana and union
+  const { data: mosquesData } = useQuery<{ mosques: Mosque[] }>({
+    queryKey: ["/api/mosques", { thanaId: formData.thanaId, unionId: formData.unionId }],
+    enabled: !!formData.thanaId && !!formData.unionId,
+  });
+
+  const thanas = thanasData?.thanas || [];
+  const unions = unionsData?.unions || [];
+  const mosques = mosquesData?.mosques || [];
+
+  // Reset union and mosque when thana changes
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, unionId: "", mosqueId: "" }));
+  }, [formData.thanaId]);
+
+  // Reset mosque when union changes
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, mosqueId: "" }));
+  }, [formData.unionId]);
 
   const handleActivityToggle = (activityId: string) => {
     setFormData(prev => ({
       ...prev,
-      activities: prev.activities.includes(activityId)
-        ? prev.activities.filter(id => id !== activityId)
-        : [...prev.activities, activityId]
+      tabligActivities: prev.tabligActivities.includes(activityId)
+        ? prev.tabligActivities.filter(id => id !== activityId)
+        : [...prev.tabligActivities, activityId]
     }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit?.(formData);
-    console.log("Registration:", formData);
+    
+    // Validate passwords match
+    if (formData.password !== formData.confirmPassword) {
+      toast({
+        variant: "destructive",
+        title: "পাসওয়ার্ড মিলছে না",
+        description: "পাসওয়ার্ড এবং নিশ্চিত পাসওয়ার্ড একই হতে হবে",
+      });
+      return;
+    }
+
+    // Prepare data for submission
+    const { confirmPassword, ...submitData } = formData;
+    onSubmit?.(submitData);
   };
 
   return (
@@ -132,44 +180,60 @@ export default function RegistrationForm({ onSubmit, onLoginClick }: Registratio
         <div className="grid md:grid-cols-3 gap-6">
           <div className="space-y-2">
             <Label htmlFor="thana" data-testid="label-thana">থানা *</Label>
-            <Select value={formData.thana} onValueChange={(value) => setFormData({...formData, thana: value})}>
+            <Select 
+              value={formData.thanaId} 
+              onValueChange={(value) => setFormData({...formData, thanaId: value})}
+              disabled={isLoading}
+            >
               <SelectTrigger id="thana" className="glass" data-testid="select-thana">
                 <SelectValue placeholder="থানা নির্বাচন করুন" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="sadar">জামালপুর সদর</SelectItem>
-                <SelectItem value="melandaha">মেলান্দহ</SelectItem>
-                <SelectItem value="islampur">ইসলামপুর</SelectItem>
-                <SelectItem value="dewanganj">দেওয়ানগঞ্জ</SelectItem>
-                <SelectItem value="madarganj">মাদারগঞ্জ</SelectItem>
-                <SelectItem value="sarishabari">সরিষাবাড়ি</SelectItem>
-                <SelectItem value="bakshiganj">বকসীগঞ্জ</SelectItem>
+                {thanas.map((thana) => (
+                  <SelectItem key={thana.id} value={thana.id}>
+                    {thana.nameBn}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="union" data-testid="label-union">ইউনিয়ন *</Label>
-            <Select value={formData.union} onValueChange={(value) => setFormData({...formData, union: value})}>
+            <Select 
+              value={formData.unionId} 
+              onValueChange={(value) => setFormData({...formData, unionId: value})}
+              disabled={isLoading || !formData.thanaId}
+            >
               <SelectTrigger id="union" className="glass" data-testid="select-union">
                 <SelectValue placeholder="ইউনিয়ন নির্বাচন করুন" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="union1">ইউনিয়ন ১</SelectItem>
-                <SelectItem value="union2">ইউনিয়ন ২</SelectItem>
+                {unions.map((union) => (
+                  <SelectItem key={union.id} value={union.id}>
+                    {union.nameBn}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="mosque" data-testid="label-mosque">মসজিদ (ঐচ্ছিক)</Label>
-            <Select value={formData.mosque} onValueChange={(value) => setFormData({...formData, mosque: value})}>
+            <Select 
+              value={formData.mosqueId} 
+              onValueChange={(value) => setFormData({...formData, mosqueId: value})}
+              disabled={isLoading || !formData.unionId}
+            >
               <SelectTrigger id="mosque" className="glass" data-testid="select-mosque">
                 <SelectValue placeholder="মসজিদ নির্বাচন করুন" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="mosque1">বাইতুল আমান মসজিদ</SelectItem>
-                <SelectItem value="mosque2">জামে মসজিদ</SelectItem>
+                {mosques.map((mosque) => (
+                  <SelectItem key={mosque.id} value={mosque.id}>
+                    {mosque.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -183,9 +247,10 @@ export default function RegistrationForm({ onSubmit, onLoginClick }: Registratio
               <div key={activity.id} className="flex items-center space-x-3">
                 <Checkbox
                   id={activity.id}
-                  checked={formData.activities.includes(activity.id)}
+                  checked={formData.tabligActivities.includes(activity.id)}
                   onCheckedChange={() => handleActivityToggle(activity.id)}
                   data-testid={`checkbox-${activity.id}`}
+                  disabled={isLoading}
                 />
                 <Label
                   htmlFor={activity.id}
@@ -203,8 +268,9 @@ export default function RegistrationForm({ onSubmit, onLoginClick }: Registratio
           type="submit" 
           className="w-full" 
           data-testid="button-register"
+          disabled={isLoading}
         >
-          রেজিস্ট্রেশন সম্পন্ন করুন
+          {isLoading ? "রেজিস্ট্রেশন হচ্ছে..." : "রেজিস্ট্রেশন সম্পন্ন করুন"}
         </Button>
       </form>
 

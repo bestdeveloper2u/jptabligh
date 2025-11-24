@@ -5,18 +5,18 @@ import { Label } from "@/components/ui/label";
 import GlassCard from "./GlassCard";
 
 interface LoginFormProps {
-  onSubmit?: (email: string, password: string) => void;
+  onSubmit?: (phone: string, password: string) => void;
   onRegisterClick?: () => void;
+  isLoading?: boolean;
 }
 
-export default function LoginForm({ onSubmit, onRegisterClick }: LoginFormProps) {
-  const [email, setEmail] = useState("");
+export default function LoginForm({ onSubmit, onRegisterClick, isLoading }: LoginFormProps) {
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit?.(email, password);
-    console.log("Login:", { email, password });
+    onSubmit?.(phone, password);
   };
 
   return (
@@ -28,15 +28,17 @@ export default function LoginForm({ onSubmit, onRegisterClick }: LoginFormProps)
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="email" data-testid="label-email">ইমেইল / ফোন নাম্বার</Label>
+          <Label htmlFor="phone" data-testid="label-email">ফোন নাম্বার</Label>
           <Input
-            id="email"
-            type="text"
-            placeholder="your@email.com অথবা ০১৭১২৩৪৫৬৭৮"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            id="phone"
+            type="tel"
+            placeholder="০১৭১২৩৪৫৬৭৮"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
             data-testid="input-email"
             className="glass"
+            required
+            disabled={isLoading}
           />
         </div>
 
@@ -50,6 +52,8 @@ export default function LoginForm({ onSubmit, onRegisterClick }: LoginFormProps)
             onChange={(e) => setPassword(e.target.value)}
             data-testid="input-password"
             className="glass"
+            required
+            disabled={isLoading}
           />
         </div>
 
@@ -57,8 +61,9 @@ export default function LoginForm({ onSubmit, onRegisterClick }: LoginFormProps)
           type="submit" 
           className="w-full" 
           data-testid="button-login"
+          disabled={isLoading}
         >
-          লগইন করুন
+          {isLoading ? "লগইন হচ্ছে..." : "লগইন করুন"}
         </Button>
       </form>
 

@@ -1,7 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import GlassCard from "./GlassCard";
+import type { Thana, Union } from "@shared/schema";
 
 interface FilterBarProps {
   searchValue: string;
@@ -20,6 +22,20 @@ export default function FilterBar({
   unionValue,
   onUnionChange,
 }: FilterBarProps) {
+  // Fetch thanas
+  const { data: thanasData } = useQuery<{ thanas: Thana[] }>({
+    queryKey: ["/api/thanas"],
+  });
+
+  // Fetch unions based on selected thana
+  const { data: unionsData } = useQuery<{ unions: Union[] }>({
+    queryKey: ["/api/unions", { thanaId: thanaValue }],
+    enabled: !!thanaValue && thanaValue !== "all",
+  });
+
+  const thanas = thanasData?.thanas || [];
+  const unions = unionsData?.unions || [];
+
   return (
     <GlassCard className="sticky top-4 z-10">
       <div className="flex flex-col md:flex-row gap-4">
@@ -41,24 +57,25 @@ export default function FilterBar({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">সকল থানা</SelectItem>
-            <SelectItem value="sadar">জামালপুর সদর</SelectItem>
-            <SelectItem value="melandaha">মেলান্দহ</SelectItem>
-            <SelectItem value="islampur">ইসলামপুর</SelectItem>
-            <SelectItem value="dewanganj">দেওয়ানগঞ্জ</SelectItem>
-            <SelectItem value="madarganj">মাদারগঞ্জ</SelectItem>
-            <SelectItem value="sarishabari">সরিষাবাড়ি</SelectItem>
-            <SelectItem value="bakshiganj">বকসীগঞ্জ</SelectItem>
+            {thanas.map((thana) => (
+              <SelectItem key={thana.id} value={thana.id}>
+                {thana.nameBn}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
-        <Select value={unionValue} onValueChange={onUnionChange}>
+        <Select value={unionValue} onValueChange={onUnionChange} disabled={!thanaValue || thanaValue === "all"}>
           <SelectTrigger className="w-full md:w-48 glass" data-testid="select-filter-union">
             <SelectValue placeholder="সকল ইউনিয়ন" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">সকল ইউনিয়ন</SelectItem>
-            <SelectItem value="union1">ইউনিয়ন ১</SelectItem>
-            <SelectItem value="union2">ইউনিয়ন ২</SelectItem>
+            {unions.map((union) => (
+              <SelectItem key={union.id} value={union.id}>
+                {union.nameBn}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

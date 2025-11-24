@@ -1,18 +1,104 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Users table - handles all user types (super_admin, manager, member)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone").notNull().unique(),
   password: text("password").notNull(),
+  role: text("role").notNull().default("member"), // super_admin, manager, member
+  thanaId: varchar("thana_id"),
+  unionId: varchar("union_id"),
+  mosqueId: varchar("mosque_id"),
+  tabligActivities: text("tablig_activities").array().default(sql`ARRAY[]::text[]`),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+// Thanas (police stations/subdivisions) in Jamalpur district
+export const thanas = pgTable("thanas", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  nameBn: text("name_bn").notNull(),
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
+// Unions within each thana
+export const unions = pgTable("unions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  nameBn: text("name_bn").notNull(),
+  thanaId: varchar("thana_id").notNull().references(() => thanas.id, { onDelete: "cascade" }),
+});
+
+// Mosques
+export const mosques = pgTable("mosques", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  thanaId: varchar("thana_id").notNull().references(() => thanas.id, { onDelete: "cascade" }),
+  unionId: varchar("union_id").notNull().references(() => unions.id, { onDelete: "cascade" }),
+  address: text("address").notNull(),
+  phone: text("phone"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Halqas (circles/groups)
+export const halqas = pgTable("halqas", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  thanaId: varchar("thana_id").notNull().references(() => thanas.id, { onDelete: "cascade" }),
+  unionId: varchar("union_id").notNull().references(() => unions.id, { onDelete: "cascade" }),
+  membersCount: integer("members_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Insert schemas
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().min(11),
+  password: z.string().min(6),
+  tabligActivities: z.array(z.string()).optional(),
+});
+
+export const insertThanaSchema = createInsertSchema(thanas).omit({ id: true });
+export const insertUnionSchema = createInsertSchema(unions).omit({ id: true });
+
+export const insertMosqueSchema = createInsertSchema(mosques).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertHalqaSchema = createInsertSchema(halqas).omit({
+  id: true,
+  createdAt: true,
+  membersCount: true,
+});
+
+// Types
 export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type Thana = typeof thanas.$inferSelect;
+export type InsertThana = z.infer<typeof insertThanaSchema>;
+
+export type Union = typeof unions.$inferSelect;
+export type InsertUnion = z.infer<typeof insertUnionSchema>;
+
+export type Mosque = typeof mosques.$inferSelect;
+export type InsertMosque = z.infer<typeof insertMosqueSchema>;
+
+export type Halqa = typeof halqas.$inferSelect;
+export type InsertHalqa = z.infer<typeof insertHalqaSchema>;
+
+// Login schema
+export const loginSchema = z.object({
+  phone: z.string().min(11),
+  password: z.string().min(6),
+});
+
+export type LoginData = z.infer<typeof loginSchema>;
