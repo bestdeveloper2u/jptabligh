@@ -8,6 +8,9 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   userName: string;
   userRole: "super_admin" | "manager" | "member";
+  activeView: string;
+  onViewChange: (view: string) => void;
+  onLogout: () => void;
 }
 
 const sidebarItems = [
@@ -19,8 +22,14 @@ const sidebarItems = [
   { id: "settings", label: "সেটিংস", icon: Settings },
 ];
 
-export default function DashboardLayout({ children, userName, userRole }: DashboardLayoutProps) {
-  const [activeTab, setActiveTab] = useState("dashboard");
+export default function DashboardLayout({ 
+  children, 
+  userName, 
+  userRole, 
+  activeView, 
+  onViewChange,
+  onLogout 
+}: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const filteredItems = sidebarItems.filter(
@@ -33,7 +42,7 @@ export default function DashboardLayout({ children, userName, userRole }: Dashbo
         userName={userName}
         userRole={userRole}
         onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        onLogout={() => console.log("Logout")}
+        onLogout={onLogout}
       />
 
       <div className="flex">
@@ -46,15 +55,14 @@ export default function DashboardLayout({ children, userName, userRole }: Dashbo
           <nav className="p-4 space-y-2">
             {filteredItems.map((item) => {
               const Icon = item.icon;
-              const isActive = activeTab === item.id;
+              const isActive = activeView === item.id;
 
               return (
                 <button
                   key={item.id}
                   onClick={() => {
-                    setActiveTab(item.id);
+                    onViewChange(item.id);
                     setIsSidebarOpen(false);
-                    console.log("Navigate to:", item.id);
                   }}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all",
@@ -86,7 +94,7 @@ export default function DashboardLayout({ children, userName, userRole }: Dashbo
         </main>
       </div>
 
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNavigation activeTab={activeView} onTabChange={onViewChange} />
     </div>
   );
 }
