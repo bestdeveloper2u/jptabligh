@@ -179,7 +179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Mosque Routes =====
   
-  app.get("/api/mosques", requireAuth, async (req, res) => {
+  app.get("/api/mosques", async (req, res) => {
     try {
       const { search, thanaId, unionId } = req.query;
 
@@ -248,7 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Halqa Routes =====
   
-  app.get("/api/halqas", requireAuth, async (req, res) => {
+  app.get("/api/halqas", async (req, res) => {
     try {
       const { search, thanaId, unionId } = req.query;
 
