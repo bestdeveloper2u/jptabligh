@@ -1,0 +1,92 @@
+import { useState } from "react";
+import { Home, Building2, MapPin, Users, Settings, UserPlus } from "lucide-react";
+import TopNavigation from "./TopNavigation";
+import BottomNavigation from "./BottomNavigation";
+import { cn } from "@/lib/utils";
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+  userName: string;
+  userRole: "super_admin" | "manager" | "member";
+}
+
+const sidebarItems = [
+  { id: "dashboard", label: "ড্যাশবোর্ড", icon: Home },
+  { id: "mosques", label: "মসজিদ", icon: Building2 },
+  { id: "halqa", label: "হালকা", icon: MapPin },
+  { id: "members", label: "সাথীগণ", icon: Users },
+  { id: "managers", label: "ম্যানেজার", icon: UserPlus, adminOnly: true },
+  { id: "settings", label: "সেটিংস", icon: Settings },
+];
+
+export default function DashboardLayout({ children, userName, userRole }: DashboardLayoutProps) {
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const filteredItems = sidebarItems.filter(
+    item => !item.adminOnly || userRole === "super_admin"
+  );
+
+  return (
+    <div className="gradient-bg min-h-screen">
+      <TopNavigation
+        userName={userName}
+        userRole={userRole}
+        onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        onLogout={() => console.log("Logout")}
+      />
+
+      <div className="flex">
+        <aside
+          className={cn(
+            "fixed md:sticky top-[73px] left-0 h-[calc(100vh-73px)] w-64 glass border-r transition-transform duration-300 z-40",
+            isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          )}
+        >
+          <nav className="p-4 space-y-2">
+            {filteredItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsSidebarOpen(false);
+                    console.log("Navigate to:", item.id);
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all",
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-foreground hover-elevate"
+                  )}
+                  data-testid={`sidebar-${item.id}`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="font-medium">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        {isSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+
+        <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">
+          <div className="max-w-7xl mx-auto">
+            {children}
+          </div>
+        </main>
+      </div>
+
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+    </div>
+  );
+}
