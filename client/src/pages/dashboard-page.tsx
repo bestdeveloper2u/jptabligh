@@ -36,11 +36,13 @@ const tabligActivities = [
 // Form schemas
 const memberFormSchema = z.object({
   name: z.string().min(1, "নাম আবশ্যক"),
+  email: z.string().email("সঠিক ইমেইল দিন").optional().or(z.literal("")),
   phone: z.string().min(11, "সঠিক মোবাইল নাম্বার দিন"),
   password: z.string().min(6, "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে"),
   thanaId: z.string().min(1, "থানা নির্বাচন করুন"),
   unionId: z.string().min(1, "ইউনিয়ন নির্বাচন করুন"),
   mosqueId: z.string().optional(),
+  halqaId: z.string().optional(),
   tabligActivities: z.array(z.string()).optional(),
 });
 
@@ -62,6 +64,7 @@ const halqaFormSchema = z.object({
 
 const managerFormSchema = z.object({
   name: z.string().min(1, "নাম আবশ্যক"),
+  email: z.string().email("সঠিক ইমেইল দিন").optional().or(z.literal("")),
   phone: z.string().min(11, "সঠিক মোবাইল নাম্বার দিন"),
   password: z.string().min(6, "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে"),
   thanaId: z.string().min(1, "থানা নির্বাচন করুন"),
@@ -754,37 +757,270 @@ export default function DashboardPage() {
   );
 
   // Settings view content
-  const renderSettingsView = () => (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold mb-2">সেটিংস</h2>
-        <p className="text-muted-foreground">আপনার প্রোফাইল এবং অ্যাকাউন্ট সেটিংস</p>
-      </div>
+  const renderSettingsView = () => {
+    const handleExportMembers = async () => {
+      try {
+        const response = await fetch('/api/members', { credentials: 'include' });
+        const data = await response.json();
+        const members = data.members || [];
+        
+        // Create CSV content
+        const headers = ['নাম', 'মোবাইল', 'ইমেইল', 'থানা', 'ইউনিয়ন', 'তাবলীগ কার্যক্রম'];
+        const csvContent = [
+          headers.join(','),
+          ...members.map((m: any) => [
+            m.name,
+            m.phone,
+            m.email || '',
+            getThanaName(m.thanaId),
+            getUnionName(m.unionId),
+            (m.tabligActivities || []).join('; ')
+          ].map(field => `"${field}"`).join(','))
+        ].join('\n');
 
-      <div className="glass p-6 rounded-lg space-y-4">
+        // Download file
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `sathi-list-${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        
+        toast({
+          title: "সফল হয়েছে",
+          description: "সাথীদের তালিকা ডাউনলোড হয়েছে",
+        });
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "ব্যর্থ হয়েছে",
+          description: "ডেটা এক্সপোর্ট করতে সমস্যা হয়েছে",
+        });
+      }
+    };
+
+    const handleExportMosques = async () => {
+      try {
+        const response = await fetch('/api/mosques', { credentials: 'include' });
+        const data = await response.json();
+        const mosquesList = data.mosques || [];
+        
+        const headers = ['মসজিদের নাম', 'ঠিকানা', 'থানা', 'ইউনিয়ন', 'ইমামের ফোন', 'মুয়াজ্জিনের ফোন'];
+        const csvContent = [
+          headers.join(','),
+          ...mosquesList.map((m: any) => [
+            m.name,
+            m.address,
+            getThanaName(m.thanaId),
+            getUnionName(m.unionId),
+            m.imamPhone || '',
+            m.muazzinPhone || ''
+          ].map(field => `"${field}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `mosque-list-${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        
+        toast({
+          title: "সফল হয়েছে",
+          description: "মসজিদের তালিকা ডাউনলোড হয়েছে",
+        });
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "ব্যর্থ হয়েছে",
+          description: "ডেটা এক্সপোর্ট করতে সমস্যা হয়েছে",
+        });
+      }
+    };
+
+    const handleExportHalqas = async () => {
+      try {
+        const response = await fetch('/api/halqas', { credentials: 'include' });
+        const data = await response.json();
+        const halqasList = data.halqas || [];
+        
+        const headers = ['হালকার নাম', 'থানা', 'ইউনিয়ন', 'সদস্য সংখ্যা', 'তৈরির তারিখ'];
+        const csvContent = [
+          headers.join(','),
+          ...halqasList.map((h: any) => [
+            h.name,
+            getThanaName(h.thanaId),
+            getUnionName(h.unionId),
+            h.membersCount || 0,
+            new Date(h.createdAt).toLocaleDateString('bn-BD')
+          ].map(field => `"${field}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `halqa-list-${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        
+        toast({
+          title: "সফল হয়েছে",
+          description: "হালকার তালিকা ডাউনলোড হয়েছে",
+        });
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "ব্যর্থ হয়েছে",
+          description: "ডেটা এক্সপোর্ট করতে সমস্যা হয়েছে",
+        });
+      }
+    };
+
+    return (
+      <div className="space-y-6">
         <div>
-          <h3 className="text-xl font-semibold mb-4">ব্যক্তিগত তথ্য</h3>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-muted-foreground">নাম</Label>
-              <p className="text-lg">{user?.name}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">মোবাইল নাম্বার</Label>
-              <p className="text-lg">{user?.phone}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">ভূমিকা</Label>
-              <p className="text-lg">
-                {user?.role === "super_admin" ? "সুপার এডমিন" : 
-                 user?.role === "manager" ? "ম্যানেজার" : "সাথী"}
-              </p>
+          <h2 className="text-3xl font-bold mb-2">সেটিংস</h2>
+          <p className="text-muted-foreground">আপনার প্রোফাইল এবং অ্যাকাউন্ট সেটিংস</p>
+        </div>
+
+        {/* Profile Section */}
+        <div className="glass p-6 rounded-lg space-y-4">
+          <div>
+            <h3 className="text-xl font-semibold mb-4">ব্যক্তিগত তথ্য</h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-sm">নাম</Label>
+                <p className="text-lg font-medium">{user?.name}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-sm">মোবাইল নাম্বার</Label>
+                <p className="text-lg font-medium">{user?.phone}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-sm">ইমেইল</Label>
+                <p className="text-lg font-medium">{user?.email || "যোগ করা হয়নি"}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-sm">ভূমিকা</Label>
+                <p className="text-lg font-medium">
+                  {user?.role === "super_admin" ? "সুপার এডমিন" : 
+                   user?.role === "manager" ? "ম্যানেজার" : "সাথী"}
+                </p>
+              </div>
+              {user?.thanaId && (
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground text-sm">থানা</Label>
+                  <p className="text-lg font-medium">{getThanaName(user.thanaId)}</p>
+                </div>
+              )}
+              {user?.unionId && (
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground text-sm">ইউনিয়ন</Label>
+                  <p className="text-lg font-medium">{getUnionName(user.unionId)}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Thana/Union Management - Super Admin Only */}
+        {isSuperAdmin && (
+          <div className="glass p-6 rounded-lg space-y-4">
+            <h3 className="text-xl font-semibold mb-4">থানা ও ইউনিয়ন ব্যবস্থাপনা</h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-medium mb-2">মোট থানা</h4>
+                <p className="text-3xl font-bold text-primary">{thanas.length}</p>
+                <p className="text-sm text-muted-foreground mt-1">জামালপুর জেলার সকল থানা</p>
+              </div>
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-medium mb-2">মোট ইউনিয়ন</h4>
+                <p className="text-3xl font-bold text-primary">{allUnionsData?.unions?.length || 0}</p>
+                <p className="text-sm text-muted-foreground mt-1">সকল থানার অধীনে ইউনিয়ন</p>
+              </div>
+            </div>
+            <div className="pt-4">
+              <h4 className="font-medium mb-3">থানা অনুযায়ী তালিকা</h4>
+              <div className="grid md:grid-cols-3 gap-2">
+                {thanas.map((thana) => (
+                  <div key={thana.id} className="p-3 bg-muted/50 rounded-lg">
+                    <p className="font-medium">{thana.nameBn}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {allUnionsData?.unions?.filter(u => u.thanaId === thana.id).length || 0} ইউনিয়ন
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Data Export Section - Super Admin Only */}
+        {isSuperAdmin && (
+          <div className="glass p-6 rounded-lg space-y-4">
+            <h3 className="text-xl font-semibold mb-4">ডেটা এক্সপোর্ট</h3>
+            <p className="text-muted-foreground mb-4">CSV ফরম্যাটে ডেটা ডাউনলোড করুন</p>
+            <div className="flex flex-wrap gap-3">
+              <Button 
+                variant="outline" 
+                onClick={handleExportMembers}
+                data-testid="button-export-members"
+              >
+                সাথীদের তালিকা ডাউনলোড
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportMosques}
+                data-testid="button-export-mosques"
+              >
+                মসজিদের তালিকা ডাউনলোড
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportHalqas}
+                data-testid="button-export-halqas"
+              >
+                হালকার তালিকা ডাউনলোড
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Statistics Section */}
+        <div className="glass p-6 rounded-lg space-y-4">
+          <h3 className="text-xl font-semibold mb-4">সংক্ষিপ্ত পরিসংখ্যান</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-3xl font-bold text-primary">{stats?.totalMembers || 0}</p>
+              <p className="text-sm text-muted-foreground">মোট সাথী</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-3xl font-bold text-primary">{stats?.totalMosques || 0}</p>
+              <p className="text-sm text-muted-foreground">মোট মসজিদ</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-3xl font-bold text-primary">{stats?.totalHalqas || 0}</p>
+              <p className="text-sm text-muted-foreground">মোট হালকা</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-3xl font-bold text-primary">{stats?.thisMonthTablig || 0}</p>
+              <p className="text-sm text-muted-foreground">এই মাসে তাবলীগ</p>
+            </div>
+          </div>
+        </div>
+
+        {/* About Section */}
+        <div className="glass p-6 rounded-lg space-y-4">
+          <h3 className="text-xl font-semibold mb-4">অ্যাপ সম্পর্কে</h3>
+          <div className="space-y-2">
+            <p className="text-muted-foreground">
+              জামালপুর জেলার তাবলীগ জামাত সাথী ব্যবস্থাপনা সিস্টেম
+            </p>
+            <p className="text-sm text-muted-foreground">
+              ভার্সন ১.০.০
+            </p>
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Render content based on active view
   const renderContent = () => {
@@ -875,11 +1111,13 @@ function AddMemberDialog({
     resolver: zodResolver(memberFormSchema),
     defaultValues: {
       name: "",
+      email: "",
       phone: "",
       password: "",
       thanaId: "",
       unionId: "",
       mosqueId: "",
+      halqaId: "",
       tabligActivities: [],
     },
   });
@@ -900,21 +1138,30 @@ function AddMemberDialog({
     enabled: !!selectedThana && !!selectedUnion,
   });
 
+  // Fetch halqas based on selected thana and union
+  const { data: halqasData } = useQuery<{ halqas: Halqa[] }>({
+    queryKey: ["/api/halqas", { thanaId: selectedThana, unionId: selectedUnion }],
+    enabled: !!selectedThana && !!selectedUnion,
+  });
+
   const unions = unionsData?.unions || [];
   const mosques = mosquesData?.mosques || [];
+  const halqas = halqasData?.halqas || [];
 
-  // Reset union and mosque when thana changes
+  // Reset union, mosque, and halqa when thana changes
   useEffect(() => {
     if (selectedThana) {
       form.setValue("unionId", "");
       form.setValue("mosqueId", "");
+      form.setValue("halqaId", "");
     }
   }, [selectedThana, form]);
 
-  // Reset mosque when union changes
+  // Reset mosque and halqa when union changes
   useEffect(() => {
     if (selectedUnion) {
       form.setValue("mosqueId", "");
+      form.setValue("halqaId", "");
     }
   }, [selectedUnion, form]);
 
@@ -973,19 +1220,35 @@ function AddMemberDialog({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>পাসওয়ার্ড *</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} data-testid="input-member-password" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ইমেইল (ঐচ্ছিক)</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="example@email.com" {...field} data-testid="input-member-email" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>পাসওয়ার্ড *</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="••••••••" {...field} data-testid="input-member-password" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="grid md:grid-cols-3 gap-4">
               <FormField
@@ -1071,6 +1334,35 @@ function AddMemberDialog({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="halqaId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>হালকা (ঐচ্ছিক)</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value}
+                    disabled={!selectedUnion}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-member-halqa">
+                        <SelectValue placeholder="হালকা নির্বাচন করুন" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {halqas.map((halqa) => (
+                        <SelectItem key={halqa.id} value={halqa.id}>
+                          {halqa.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="space-y-3">
               <Label className="text-base font-semibold">তাবলীগ কার্যক্রম</Label>
@@ -1529,6 +1821,7 @@ function AddManagerDialog({
     resolver: zodResolver(managerFormSchema),
     defaultValues: {
       name: "",
+      email: "",
       phone: "",
       password: "",
       thanaId: "",
@@ -1552,47 +1845,65 @@ function AddManagerDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>পূর্ণ নাম *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="নাম লিখুন" {...field} data-testid="input-manager-name" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>পূর্ণ নাম *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="নাম লিখুন" {...field} data-testid="input-manager-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>মোবাইল নাম্বার *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="০১৭১২৩৪৫৬৭৮" {...field} data-testid="input-manager-phone" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>মোবাইল নাম্বার *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="০১৭১২৩৪৫৬৭৮" {...field} data-testid="input-manager-phone" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>পাসওয়ার্ড *</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} data-testid="input-manager-password" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ইমেইল (ঐচ্ছিক)</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="example@email.com" {...field} data-testid="input-manager-email" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>পাসওয়ার্ড *</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="••••••••" {...field} data-testid="input-manager-password" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}

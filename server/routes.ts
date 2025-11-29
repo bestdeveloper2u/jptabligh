@@ -319,18 +319,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/members", requireAuth, async (req, res) => {
     try {
-      const { search, thanaId, unionId } = req.query;
+      const user = (req as any).user as User;
+      const { search, thanaId, unionId, role } = req.query;
 
-      let members;
-      if (search) {
-        members = await storage.searchUsers(
-          search as string,
-          thanaId as string,
-          unionId as string
-        );
-      } else {
-        members = await storage.getUsersByRole("member");
+      // Determine target role - default to "member" if not provided or empty
+      const roleString = typeof role === "string" && role.trim() !== "" ? role.trim() : "member";
+      
+      // Restrict manager queries to super_admin only
+      if (roleString === "manager" && user.role !== "super_admin") {
+        return res.status(403).json({ error: "আপনার এই অপারেশন করার অনুমতি নেই" });
       }
+      
+      // Always use searchUsers which handles all filtering including role
+      const members = await storage.searchUsers(
+        (search as string) || "",
+        thanaId as string,
+        unionId as string,
+        roleString
+      );
 
       // Remove passwords
       const membersWithoutPasswords = members.map(({ password, ...member }) => member);

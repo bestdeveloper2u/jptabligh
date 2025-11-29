@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   thanaId: varchar("thana_id"),
   unionId: varchar("union_id"),
   mosqueId: varchar("mosque_id"),
+  halqaId: varchar("halqa_id"),
   tabligActivities: text("tablig_activities").array().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

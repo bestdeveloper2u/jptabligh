@@ -111,14 +111,22 @@ export class DbStorage implements IStorage {
     return await db.select().from(users).where(eq(users.role, role));
   }
 
-  async searchUsers(query: string, thanaId?: string, unionId?: string): Promise<User[]> {
-    const conditions = [
-      or(
-        ilike(users.name, `%${query}%`),
-        ilike(users.phone, `%${query}%`),
-        ilike(users.email || "", `%${query}%`)
-      ),
-    ];
+  async searchUsers(query: string, thanaId?: string, unionId?: string, role?: string): Promise<User[]> {
+    const conditions: any[] = [];
+
+    // Only add search condition if query is not empty
+    if (query && query.trim() !== "") {
+      conditions.push(
+        or(
+          ilike(users.name, `%${query}%`),
+          ilike(users.phone, `%${query}%`),
+          ilike(users.email || "", `%${query}%`)
+        )
+      );
+    }
+
+    // Add role filter - defaults to "member" if not specified
+    conditions.push(eq(users.role, role || "member"));
 
     if (thanaId && thanaId !== "all") {
       conditions.push(eq(users.thanaId, thanaId));
