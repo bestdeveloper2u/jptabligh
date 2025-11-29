@@ -94,6 +94,27 @@ export default function DashboardPage() {
     queryKey: ["/api/thanas"],
   });
 
+  // Fetch all unions for lookup - using a stable query key to always get all unions
+  const { data: allUnionsData } = useQuery<{ unions: Union[] }>({
+    queryKey: ["/api/unions", { all: "true" }],
+  });
+
+  // Create lookup maps for thana and union names
+  const thanaNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    thanasData?.thanas?.forEach(t => map.set(t.id, t.nameBn));
+    return map;
+  }, [thanasData]);
+
+  const unionNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    allUnionsData?.unions?.forEach(u => map.set(u.id, u.nameBn));
+    return map;
+  }, [allUnionsData]);
+
+  const getThanaName = (id: string | null | undefined) => id ? (thanaNameMap.get(id) || id) : "";
+  const getUnionName = (id: string | null | undefined) => id ? (unionNameMap.get(id) || id) : "";
+
   // Fetch members with filters
   const membersQueryKey = useMemo(() => {
     const params: Record<string, string> = {};
@@ -415,8 +436,8 @@ export default function DashboardPage() {
                   id={member.id}
                   name={member.name}
                   phone={member.phone}
-                  thana={member.thanaId || ""}
-                  union={member.unionId || ""}
+                  thana={getThanaName(member.thanaId)}
+                  union={getUnionName(member.unionId)}
                   mosque={member.mosqueId || ""}
                   activities={member.tabligActivities || []}
                   onView={() => console.log("View:", member.id)}
@@ -455,8 +476,8 @@ export default function DashboardPage() {
                   key={mosque.id}
                   id={mosque.id}
                   name={mosque.name}
-                  thana={mosque.thanaId}
-                  union={mosque.unionId}
+                  thana={getThanaName(mosque.thanaId)}
+                  union={getUnionName(mosque.unionId)}
                   address={mosque.address}
                   phone={mosque.phone || ""}
                   membersCount={0}
@@ -496,8 +517,8 @@ export default function DashboardPage() {
                   key={halqa.id}
                   id={halqa.id}
                   name={halqa.name}
-                  thana={halqa.thanaId}
-                  union={halqa.unionId}
+                  thana={getThanaName(halqa.thanaId)}
+                  union={getUnionName(halqa.unionId)}
                   membersCount={halqa.membersCount}
                   createdDate={new Date(halqa.createdAt).toLocaleDateString('bn-BD')}
                   onView={() => console.log("View:", halqa.id)}
@@ -555,8 +576,8 @@ export default function DashboardPage() {
               id={member.id}
               name={member.name}
               phone={member.phone}
-              thana={member.thanaId || ""}
-              union={member.unionId || ""}
+              thana={getThanaName(member.thanaId)}
+              union={getUnionName(member.unionId)}
               mosque={member.mosqueId || ""}
               activities={member.tabligActivities || []}
               onView={() => console.log("View:", member.id)}
@@ -611,8 +632,8 @@ export default function DashboardPage() {
               key={mosque.id}
               id={mosque.id}
               name={mosque.name}
-              thana={mosque.thanaId}
-              union={mosque.unionId}
+              thana={getThanaName(mosque.thanaId)}
+              union={getUnionName(mosque.unionId)}
               address={mosque.address}
               phone={mosque.phone || ""}
               membersCount={0}
@@ -668,8 +689,8 @@ export default function DashboardPage() {
               key={halqa.id}
               id={halqa.id}
               name={halqa.name}
-              thana={halqa.thanaId}
-              union={halqa.unionId}
+              thana={getThanaName(halqa.thanaId)}
+              union={getUnionName(halqa.unionId)}
               membersCount={halqa.membersCount}
               createdDate={new Date(halqa.createdAt).toLocaleDateString('bn-BD')}
               onView={() => console.log("View:", halqa.id)}
@@ -716,8 +737,8 @@ export default function DashboardPage() {
               id={manager.id}
               name={manager.name}
               phone={manager.phone}
-              thana={manager.thanaId || ""}
-              union={manager.unionId || ""}
+              thana={getThanaName(manager.thanaId)}
+              union={getUnionName(manager.unionId)}
               mosque={manager.mosqueId || ""}
               activities={manager.tabligActivities || []}
               onView={() => console.log("View:", manager.id)}
