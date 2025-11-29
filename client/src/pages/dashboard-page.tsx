@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Users, Building2, MapPin, Calendar, Plus } from "lucide-react";
+import { Users, Building2, MapPin, Calendar, Plus, Upload, Download } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -77,6 +77,13 @@ export default function DashboardPage() {
   const [search, setSearch] = useState("");
   const [thana, setThana] = useState("all");
   const [union, setUnion] = useState("all");
+
+  // Reset filters when view changes
+  useEffect(() => {
+    setSearch("");
+    setThana("all");
+    setUnion("all");
+  }, [activeView]);
   
   // Dialog states
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
@@ -873,6 +880,158 @@ export default function DashboardPage() {
       }
     };
 
+    // CSV Parser helper
+    const parseCSV = (text: string): string[][] => {
+      const lines = text.split('\n').filter(line => line.trim());
+      return lines.map(line => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      });
+    };
+
+    // Import Members handler
+    const handleImportMembers = async (file: File) => {
+      try {
+        const text = await file.text();
+        const rows = parseCSV(text);
+        
+        if (rows.length < 2) {
+          toast({
+            variant: "destructive",
+            title: "ব্যর্থ হয়েছে",
+            description: "CSV ফাইলে কোন ডেটা নেই",
+          });
+          return;
+        }
+
+        const headers = rows[0];
+        const members = rows.slice(1).map(row => ({
+          name: row[0] || '',
+          phone: row[1] || '',
+          email: row[2] || '',
+          thana: row[3] || '',
+          union: row[4] || '',
+          tabligActivities: row[5] ? row[5].split(';').map(a => a.trim()) : [],
+        })).filter(m => m.name && m.phone && m.thana && m.union);
+
+        const response = await apiRequest('POST', '/api/import/members', { members });
+        const result = await response.json();
+
+        queryClient.invalidateQueries({ queryKey: ['/api/members'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+
+        toast({
+          title: "ইমপোর্ট সম্পন্ন",
+          description: result.message,
+        });
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "ব্যর্থ হয়েছে",
+          description: error.message || "ইমপোর্ট করতে সমস্যা হয়েছে",
+        });
+      }
+    };
+
+    // Import Mosques handler
+    // CSV Format: মসজিদের নাম, ঠিকানা, ইমামের ফোন, মুয়াজ্জিনের ফোন, থানা, ইউনিয়ন
+    const handleImportMosques = async (file: File) => {
+      try {
+        const text = await file.text();
+        const rows = parseCSV(text);
+        
+        if (rows.length < 2) {
+          toast({
+            variant: "destructive",
+            title: "ব্যর্থ হয়েছে",
+            description: "CSV ফাইলে কোন ডেটা নেই",
+          });
+          return;
+        }
+
+        const mosques = rows.slice(1).map(row => ({
+          name: row[0] || '',
+          address: row[1] || '',
+          imamPhone: row[2] || '',
+          muazzinPhone: row[3] || '',
+          thana: row[4] || '',
+          union: row[5] || '',
+        })).filter(m => m.name && m.thana && m.union);
+
+        const response = await apiRequest('POST', '/api/import/mosques', { mosques });
+        const result = await response.json();
+
+        queryClient.invalidateQueries({ queryKey: ['/api/mosques'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+
+        toast({
+          title: "ইমপোর্ট সম্পন্ন",
+          description: result.message,
+        });
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "ব্যর্থ হয়েছে",
+          description: error.message || "ইমপোর্ট করতে সমস্যা হয়েছে",
+        });
+      }
+    };
+
+    // Import Halqas handler
+    const handleImportHalqas = async (file: File) => {
+      try {
+        const text = await file.text();
+        const rows = parseCSV(text);
+        
+        if (rows.length < 2) {
+          toast({
+            variant: "destructive",
+            title: "ব্যর্থ হয়েছে",
+            description: "CSV ফাইলে কোন ডেটা নেই",
+          });
+          return;
+        }
+
+        const halqas = rows.slice(1).map(row => ({
+          name: row[0] || '',
+          thana: row[1] || '',
+          union: row[2] || '',
+        })).filter(h => h.name && h.thana && h.union);
+
+        const response = await apiRequest('POST', '/api/import/halqas', { halqas });
+        const result = await response.json();
+
+        queryClient.invalidateQueries({ queryKey: ['/api/halqas'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+
+        toast({
+          title: "ইমপোর্ট সম্পন্ন",
+          description: result.message,
+        });
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "ব্যর্থ হয়েছে",
+          description: error.message || "ইমপোর্ট করতে সমস্যা হয়েছে",
+        });
+      }
+    };
+
     return (
       <div className="space-y-6">
         <div>
@@ -955,7 +1114,10 @@ export default function DashboardPage() {
         {/* Data Export Section - Super Admin Only */}
         {isSuperAdmin && (
           <div className="glass p-6 rounded-lg space-y-4">
-            <h3 className="text-xl font-semibold mb-4">ডেটা এক্সপোর্ট</h3>
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Download className="w-5 h-5" />
+              ডেটা এক্সপোর্ট
+            </h3>
             <p className="text-muted-foreground mb-4">CSV ফরম্যাটে ডেটা ডাউনলোড করুন</p>
             <div className="flex flex-wrap gap-3">
               <Button 
@@ -979,6 +1141,103 @@ export default function DashboardPage() {
               >
                 হালকার তালিকা ডাউনলোড
               </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Data Import Section - Super Admin Only */}
+        {isSuperAdmin && (
+          <div className="glass p-6 rounded-lg space-y-4">
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Upload className="w-5 h-5" />
+              ডেটা ইমপোর্ট
+            </h3>
+            <p className="text-muted-foreground mb-4">CSV ফাইল থেকে ডেটা আপলোড করুন</p>
+            
+            <div className="grid md:grid-cols-3 gap-4">
+              {/* Import Members */}
+              <div className="p-4 border rounded-lg space-y-3">
+                <h4 className="font-medium">সাথী ইমপোর্ট</h4>
+                <p className="text-sm text-muted-foreground">
+                  CSV ফরম্যাট: নাম, মোবাইল, ইমেইল, থানা, ইউনিয়ন
+                </p>
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  id="import-members"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportMembers(file);
+                    e.target.value = '';
+                  }}
+                  data-testid="input-import-members"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => document.getElementById('import-members')?.click()}
+                  data-testid="button-import-members"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  সাথী আপলোড
+                </Button>
+              </div>
+
+              {/* Import Mosques */}
+              <div className="p-4 border rounded-lg space-y-3">
+                <h4 className="font-medium">মসজিদ ইমপোর্ট</h4>
+                <p className="text-sm text-muted-foreground">
+                  CSV ফরম্যাট: নাম, ঠিকানা, ইমামের ফোন, মুয়াজ্জিনের ফোন, থানা, ইউনিয়ন
+                </p>
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  id="import-mosques"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportMosques(file);
+                    e.target.value = '';
+                  }}
+                  data-testid="input-import-mosques"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => document.getElementById('import-mosques')?.click()}
+                  data-testid="button-import-mosques"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  মসজিদ আপলোড
+                </Button>
+              </div>
+
+              {/* Import Halqas */}
+              <div className="p-4 border rounded-lg space-y-3">
+                <h4 className="font-medium">হালকা ইমপোর্ট</h4>
+                <p className="text-sm text-muted-foreground">
+                  CSV ফরম্যাট: নাম, থানা, ইউনিয়ন
+                </p>
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  id="import-halqas"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportHalqas(file);
+                    e.target.value = '';
+                  }}
+                  data-testid="input-import-halqas"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => document.getElementById('import-halqas')?.click()}
+                  data-testid="button-import-halqas"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  হালকা আপলোড
+                </Button>
+              </div>
             </div>
           </div>
         )}

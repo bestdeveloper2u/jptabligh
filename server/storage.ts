@@ -68,6 +68,13 @@ export interface IStorage {
   createHalqa(halqa: InsertHalqa): Promise<Halqa>;
   updateHalqa(id: string, halqa: Partial<InsertHalqa>): Promise<Halqa | undefined>;
   deleteHalqa(id: string): Promise<boolean>;
+
+  // Bulk import methods
+  bulkCreateMosques(mosquesList: InsertMosque[]): Promise<Mosque[]>;
+  bulkCreateHalqas(halqasList: InsertHalqa[]): Promise<Halqa[]>;
+  bulkCreateUsers(usersList: InsertUser[]): Promise<User[]>;
+  getThanaByName(nameBn: string): Promise<Thana | undefined>;
+  getUnionByName(nameBn: string, thanaId: string): Promise<Union | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -267,6 +274,37 @@ export class DbStorage implements IStorage {
   async deleteHalqa(id: string): Promise<boolean> {
     const result = await db.delete(halqas).where(eq(halqas.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Bulk import methods
+  async bulkCreateMosques(mosquesList: InsertMosque[]): Promise<Mosque[]> {
+    if (mosquesList.length === 0) return [];
+    const result = await db.insert(mosques).values(mosquesList).returning();
+    return result;
+  }
+
+  async bulkCreateHalqas(halqasList: InsertHalqa[]): Promise<Halqa[]> {
+    if (halqasList.length === 0) return [];
+    const result = await db.insert(halqas).values(halqasList).returning();
+    return result;
+  }
+
+  async bulkCreateUsers(usersList: InsertUser[]): Promise<User[]> {
+    if (usersList.length === 0) return [];
+    const result = await db.insert(users).values(usersList).returning();
+    return result;
+  }
+
+  async getThanaByName(nameBn: string): Promise<Thana | undefined> {
+    const result = await db.select().from(thanas).where(eq(thanas.nameBn, nameBn)).limit(1);
+    return result[0];
+  }
+
+  async getUnionByName(nameBn: string, thanaId: string): Promise<Union | undefined> {
+    const result = await db.select().from(unions).where(
+      and(eq(unions.nameBn, nameBn), eq(unions.thanaId, thanaId))
+    ).limit(1);
+    return result[0];
   }
 }
 

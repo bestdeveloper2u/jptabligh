@@ -4,6 +4,25 @@
 
 A full-stack web application for managing Tabligh (Islamic missionary) activities in the Jamalpur district of Bangladesh. The system enables tracking of members, mosques, and halqas (circles/groups) across different thanas (subdivisions) and unions. It features role-based access control with three user types: super_admin, manager, and member. The application supports Bengali and English languages with a modern glassmorphism design aesthetic.
 
+## Recent Changes (November 2025)
+
+### Registration Form
+- Added হালকা (Halka) field in correct order: থানা → ইউনিয়ন → হালকা → মসজিদ
+- Halka selection is optional and depends on union selection
+
+### CSV Import/Export
+- Added CSV import functionality for members, mosques, and halqas
+- Available in Settings section for super_admin users only
+- Import format matches export format for easy data round-trip
+- Row-level Zod validation with detailed error messages
+- CSV column orders:
+  - Members: নাম, ফোন, ইমেইল, থানা, ইউনিয়ন, তাবলীগ কার্যক্রম
+  - Mosques: মসজিদের নাম, ঠিকানা, ইমামের ফোন, মুয়াজ্জিনের ফোন, থানা, ইউনিয়ন
+  - Halqas: হালকার নাম, থানা, ইউনিয়ন
+
+### Filter Management
+- Filters (search, thana, union) now reset automatically when switching views
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

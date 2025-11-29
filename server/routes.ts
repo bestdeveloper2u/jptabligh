@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
+import { z } from "zod";
 import {
   insertUserSchema,
   loginSchema,
@@ -440,6 +441,259 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Delete manager error:", error);
       res.status(500).json({ error: "ম্যানেজার মুছে ফেলতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // ===== CSV Import Routes =====
+
+  // CSV row validation schemas
+  const csvMemberSchema = z.object({
+    name: z.string().min(2, "নাম কমপক্ষে ২ অক্ষর হতে হবে"),
+    phone: z.string().min(11, "ফোন নাম্বার কমপক্ষে ১১ সংখ্যার হতে হবে"),
+    email: z.string().email().optional().or(z.literal('')),
+    thana: z.string().min(1, "থানার নাম প্রয়োজন"),
+    union: z.string().min(1, "ইউনিয়নের নাম প্রয়োজন"),
+    tabligActivities: z.array(z.string()).optional(),
+  });
+
+  const csvMosqueSchema = z.object({
+    name: z.string().min(2, "মসজিদের নাম কমপক্ষে ২ অক্ষর হতে হবে"),
+    address: z.string().optional(),
+    imamPhone: z.string().optional(),
+    muazzinPhone: z.string().optional(),
+    thana: z.string().min(1, "থানার নাম প্রয়োজন"),
+    union: z.string().min(1, "ইউনিয়নের নাম প্রয়োজন"),
+  });
+
+  const csvHalqaSchema = z.object({
+    name: z.string().min(2, "হালকার নাম কমপক্ষে ২ অক্ষর হতে হবে"),
+    thana: z.string().min(1, "থানার নাম প্রয়োজন"),
+    union: z.string().min(1, "ইউনিয়নের নাম প্রয়োজন"),
+  });
+
+  // Import members from CSV
+  app.post("/api/import/members", requireAuth, requireRole("super_admin"), async (req, res) => {
+    try {
+      const { members } = req.body;
+      if (!Array.isArray(members) || members.length === 0) {
+        return res.status(400).json({ error: "কোন ডেটা পাওয়া যায়নি" });
+      }
+
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: [] as string[],
+      };
+
+      for (let i = 0; i < members.length; i++) {
+        const member = members[i];
+        const rowNum = i + 2; // +2 because row 1 is header
+        
+        try {
+          // Validate row with Zod
+          const validationResult = csvMemberSchema.safeParse(member);
+          if (!validationResult.success) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: ${validationResult.error.errors[0]?.message}`);
+            continue;
+          }
+
+          const validatedMember = validationResult.data;
+
+          // Find thana by name
+          const thana = await storage.getThanaByName(validatedMember.thana);
+          if (!thana) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: থানা পাওয়া যায়নি - ${validatedMember.thana}`);
+            continue;
+          }
+
+          // Find union by name
+          const union = await storage.getUnionByName(validatedMember.union, thana.id);
+          if (!union) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: ইউনিয়ন পাওয়া যায়নি - ${validatedMember.union}`);
+            continue;
+          }
+
+          // Check if user already exists
+          const existingUser = await storage.getUserByPhone(validatedMember.phone);
+          if (existingUser) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: ফোন নাম্বার আছে - ${validatedMember.phone}`);
+            continue;
+          }
+
+          // Hash password (use phone as default password)
+          const hashedPassword = await bcrypt.hash(validatedMember.phone, 10);
+
+          // Create user
+          await storage.createUser({
+            name: validatedMember.name,
+            phone: validatedMember.phone,
+            email: validatedMember.email || undefined,
+            password: hashedPassword,
+            thanaId: thana.id,
+            unionId: union.id,
+            role: "member",
+            tabligActivities: validatedMember.tabligActivities || [],
+          });
+
+          results.success++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push(`সারি ${rowNum}: ত্রুটি - ${member.name || 'অজানা'}`);
+        }
+      }
+
+      res.json({
+        message: `${results.success} সাথী যোগ করা হয়েছে, ${results.failed} ব্যর্থ`,
+        results,
+      });
+    } catch (error) {
+      console.error("Import members error:", error);
+      res.status(500).json({ error: "সাথী ইমপোর্ট করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // Import mosques from CSV
+  app.post("/api/import/mosques", requireAuth, requireRole("super_admin"), async (req, res) => {
+    try {
+      const { mosques: mosquesList } = req.body;
+      if (!Array.isArray(mosquesList) || mosquesList.length === 0) {
+        return res.status(400).json({ error: "কোন ডেটা পাওয়া যায়নি" });
+      }
+
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: [] as string[],
+      };
+
+      for (let i = 0; i < mosquesList.length; i++) {
+        const mosque = mosquesList[i];
+        const rowNum = i + 2;
+        
+        try {
+          // Validate row with Zod
+          const validationResult = csvMosqueSchema.safeParse(mosque);
+          if (!validationResult.success) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: ${validationResult.error.errors[0]?.message}`);
+            continue;
+          }
+
+          const validatedMosque = validationResult.data;
+
+          // Find thana by name
+          const thana = await storage.getThanaByName(validatedMosque.thana);
+          if (!thana) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: থানা পাওয়া যায়নি - ${validatedMosque.thana}`);
+            continue;
+          }
+
+          // Find union by name
+          const union = await storage.getUnionByName(validatedMosque.union, thana.id);
+          if (!union) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: ইউনিয়ন পাওয়া যায়নি - ${validatedMosque.union}`);
+            continue;
+          }
+
+          // Create mosque
+          await storage.createMosque({
+            name: validatedMosque.name,
+            address: validatedMosque.address || "",
+            thanaId: thana.id,
+            unionId: union.id,
+            imamPhone: validatedMosque.imamPhone || undefined,
+            muazzinPhone: validatedMosque.muazzinPhone || undefined,
+          });
+
+          results.success++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push(`সারি ${rowNum}: ত্রুটি - ${mosque.name || 'অজানা'}`);
+        }
+      }
+
+      res.json({
+        message: `${results.success} মসজিদ যোগ করা হয়েছে, ${results.failed} ব্যর্থ`,
+        results,
+      });
+    } catch (error) {
+      console.error("Import mosques error:", error);
+      res.status(500).json({ error: "মসজিদ ইমপোর্ট করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // Import halqas from CSV
+  app.post("/api/import/halqas", requireAuth, requireRole("super_admin"), async (req, res) => {
+    try {
+      const { halqas: halqasList } = req.body;
+      if (!Array.isArray(halqasList) || halqasList.length === 0) {
+        return res.status(400).json({ error: "কোন ডেটা পাওয়া যায়নি" });
+      }
+
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: [] as string[],
+      };
+
+      for (let i = 0; i < halqasList.length; i++) {
+        const halqa = halqasList[i];
+        const rowNum = i + 2;
+        
+        try {
+          // Validate row with Zod
+          const validationResult = csvHalqaSchema.safeParse(halqa);
+          if (!validationResult.success) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: ${validationResult.error.errors[0]?.message}`);
+            continue;
+          }
+
+          const validatedHalqa = validationResult.data;
+
+          // Find thana by name
+          const thana = await storage.getThanaByName(validatedHalqa.thana);
+          if (!thana) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: থানা পাওয়া যায়নি - ${validatedHalqa.thana}`);
+            continue;
+          }
+
+          // Find union by name
+          const union = await storage.getUnionByName(validatedHalqa.union, thana.id);
+          if (!union) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: ইউনিয়ন পাওয়া যায়নি - ${validatedHalqa.union}`);
+            continue;
+          }
+
+          // Create halqa
+          await storage.createHalqa({
+            name: validatedHalqa.name,
+            thanaId: thana.id,
+            unionId: union.id,
+          });
+
+          results.success++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push(`সারি ${rowNum}: ত্রুটি - ${halqa.name || 'অজানা'}`);
+        }
+      }
+
+      res.json({
+        message: `${results.success} হালকা যোগ করা হয়েছে, ${results.failed} ব্যর্থ`,
+        results,
+      });
+    } catch (error) {
+      console.error("Import halqas error:", error);
+      res.status(500).json({ error: "হালকা ইমপোর্ট করতে ব্যর্থ হয়েছে" });
     }
   });
 

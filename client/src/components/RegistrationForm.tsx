@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import GlassCard from "./GlassCard";
-import type { Thana, Union, Mosque } from "@shared/schema";
+import type { Thana, Union, Mosque, Halqa } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 interface RegistrationFormProps {
@@ -34,6 +34,7 @@ export default function RegistrationForm({ onSubmit, onLoginClick, isLoading }: 
     confirmPassword: "",
     thanaId: "",
     unionId: "",
+    halqaId: "",
     mosqueId: "",
     tabligActivities: [] as string[],
   });
@@ -49,6 +50,12 @@ export default function RegistrationForm({ onSubmit, onLoginClick, isLoading }: 
     enabled: !!formData.thanaId,
   });
 
+  // Fetch halqas based on selected thana and union
+  const { data: halqasData } = useQuery<{ halqas: Halqa[] }>({
+    queryKey: ["/api/halqas", { thanaId: formData.thanaId, unionId: formData.unionId }],
+    enabled: !!formData.thanaId && !!formData.unionId,
+  });
+
   // Fetch mosques based on selected thana and union
   const { data: mosquesData } = useQuery<{ mosques: Mosque[] }>({
     queryKey: ["/api/mosques", { thanaId: formData.thanaId, unionId: formData.unionId }],
@@ -57,16 +64,17 @@ export default function RegistrationForm({ onSubmit, onLoginClick, isLoading }: 
 
   const thanas = thanasData?.thanas || [];
   const unions = unionsData?.unions || [];
+  const halqas = halqasData?.halqas || [];
   const mosques = mosquesData?.mosques || [];
 
-  // Reset union and mosque when thana changes
+  // Reset union, halqa and mosque when thana changes
   useEffect(() => {
-    setFormData(prev => ({ ...prev, unionId: "", mosqueId: "" }));
+    setFormData(prev => ({ ...prev, unionId: "", halqaId: "", mosqueId: "" }));
   }, [formData.thanaId]);
 
-  // Reset mosque when union changes
+  // Reset halqa and mosque when union changes
   useEffect(() => {
-    setFormData(prev => ({ ...prev, mosqueId: "" }));
+    setFormData(prev => ({ ...prev, halqaId: "", mosqueId: "" }));
   }, [formData.unionId]);
 
   const handleActivityToggle = (activityId: string) => {
@@ -177,7 +185,7 @@ export default function RegistrationForm({ onSubmit, onLoginClick, isLoading }: 
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <Label htmlFor="thana" data-testid="label-thana">থানা *</Label>
             <Select 
@@ -212,6 +220,26 @@ export default function RegistrationForm({ onSubmit, onLoginClick, isLoading }: 
                 {unions.map((union) => (
                   <SelectItem key={union.id} value={union.id}>
                     {union.nameBn}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="halqa" data-testid="label-halqa">হালকা (ঐচ্ছিক)</Label>
+            <Select 
+              value={formData.halqaId} 
+              onValueChange={(value) => setFormData({...formData, halqaId: value})}
+              disabled={isLoading || !formData.unionId}
+            >
+              <SelectTrigger id="halqa" className="glass" data-testid="select-halqa">
+                <SelectValue placeholder="হালকা নির্বাচন করুন" />
+              </SelectTrigger>
+              <SelectContent>
+                {halqas.map((halqa) => (
+                  <SelectItem key={halqa.id} value={halqa.id}>
+                    {halqa.name}
                   </SelectItem>
                 ))}
               </SelectContent>
