@@ -47,9 +47,11 @@ const memberFormSchema = z.object({
 const mosqueFormSchema = z.object({
   name: z.string().min(1, "মসজিদের নাম আবশ্যক"),
   address: z.string().min(1, "ঠিকানা আবশ্যক"),
-  phone: z.string().optional(),
   thanaId: z.string().min(1, "থানা নির্বাচন করুন"),
   unionId: z.string().min(1, "ইউনিয়ন নির্বাচন করুন"),
+  halqaId: z.string().optional(),
+  imamPhone: z.string().optional(),
+  muazzinPhone: z.string().optional(),
 });
 
 const halqaFormSchema = z.object({
@@ -1133,13 +1135,16 @@ function AddMosqueDialog({
     defaultValues: {
       name: "",
       address: "",
-      phone: "",
       thanaId: "",
       unionId: "",
+      halqaId: "",
+      imamPhone: "",
+      muazzinPhone: "",
     },
   });
 
   const selectedThana = form.watch("thanaId");
+  const selectedUnion = form.watch("unionId");
 
   // Fetch unions based on selected thana
   const { data: unionsData } = useQuery<{ unions: Union[] }>({
@@ -1147,14 +1152,29 @@ function AddMosqueDialog({
     enabled: !!selectedThana,
   });
 
-  const unions = unionsData?.unions || [];
+  // Fetch halqas based on selected union
+  const { data: halqasData } = useQuery<{ halqas: Halqa[] }>({
+    queryKey: ["/api/halqas", { unionId: selectedUnion }],
+    enabled: !!selectedUnion,
+  });
 
-  // Reset union when thana changes
+  const unions = unionsData?.unions || [];
+  const halqas = halqasData?.halqas || [];
+
+  // Reset union and halqa when thana changes
   useEffect(() => {
     if (selectedThana) {
       form.setValue("unionId", "");
+      form.setValue("halqaId", "");
     }
   }, [selectedThana, form]);
+
+  // Reset halqa when union changes
+  useEffect(() => {
+    if (selectedUnion) {
+      form.setValue("halqaId", "");
+    }
+  }, [selectedUnion, form]);
 
   const handleSubmit = (data: z.infer<typeof mosqueFormSchema>) => {
     onSubmit(data);
@@ -1163,7 +1183,7 @@ function AddMosqueDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>নতুন মসজিদ যোগ করুন</DialogTitle>
           <DialogDescription>
@@ -1195,20 +1215,6 @@ function AddMosqueDialog({
                   <FormLabel>ঠিকানা *</FormLabel>
                   <FormControl>
                     <Input placeholder="ঠিকানা লিখুন" {...field} data-testid="input-mosque-address" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ফোন নাম্বার (ঐচ্ছিক)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="০১৭১২৩৪৫৬৭৮" {...field} data-testid="input-mosque-phone" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1265,6 +1271,65 @@ function AddMosqueDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="halqaId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>হালকা (ঐচ্ছিক)</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value}
+                    disabled={!selectedUnion}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-mosque-halqa">
+                        <SelectValue placeholder="হালকা নির্বাচন করুন" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {halqas.map((halqa) => (
+                        <SelectItem key={halqa.id} value={halqa.id}>
+                          {halqa.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="imamPhone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ইমামের ফোন নাম্বার (ঐচ্ছিক)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="০১৭১২৩৪৫৬৭৮" {...field} data-testid="input-mosque-imam-phone" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="muazzinPhone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>মুয়াজ্জিনের ফোন নাম্বার (ঐচ্ছিক)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="০১৭১২৩৪৫৬৭৮" {...field} data-testid="input-mosque-muazzin-phone" />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

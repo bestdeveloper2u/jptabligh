@@ -39,7 +39,10 @@ export const mosques = pgTable("mosques", {
   name: text("name").notNull(),
   thanaId: varchar("thana_id").notNull().references(() => thanas.id, { onDelete: "cascade" }),
   unionId: varchar("union_id").notNull().references(() => unions.id, { onDelete: "cascade" }),
+  halqaId: varchar("halqa_id"),
   address: text("address").notNull(),
+  imamPhone: text("imam_phone"),
+  muazzinPhone: text("muazzin_phone"),
   phone: text("phone"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
