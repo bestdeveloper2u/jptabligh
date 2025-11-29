@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Users, Building2, MapPin, Calendar, Plus } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -1152,28 +1152,34 @@ function AddMosqueDialog({
     enabled: !!selectedThana,
   });
 
-  // Fetch halqas based on selected union
+  // Fetch halqas based on selected thana and union
   const { data: halqasData } = useQuery<{ halqas: Halqa[] }>({
-    queryKey: ["/api/halqas", { unionId: selectedUnion }],
-    enabled: !!selectedUnion,
+    queryKey: ["/api/halqas", { thanaId: selectedThana, unionId: selectedUnion }],
+    enabled: !!selectedThana && !!selectedUnion,
   });
 
   const unions = unionsData?.unions || [];
   const halqas = halqasData?.halqas || [];
 
+  // Track previous values to detect changes
+  const prevThanaRef = useRef(selectedThana);
+  const prevUnionRef = useRef(selectedUnion);
+
   // Reset union and halqa when thana changes
   useEffect(() => {
-    if (selectedThana) {
+    if (prevThanaRef.current !== selectedThana && prevThanaRef.current !== "") {
       form.setValue("unionId", "");
       form.setValue("halqaId", "");
     }
+    prevThanaRef.current = selectedThana;
   }, [selectedThana, form]);
 
   // Reset halqa when union changes
   useEffect(() => {
-    if (selectedUnion) {
+    if (prevUnionRef.current !== selectedUnion && prevUnionRef.current !== "") {
       form.setValue("halqaId", "");
     }
+    prevUnionRef.current = selectedUnion;
   }, [selectedUnion, form]);
 
   const handleSubmit = (data: z.infer<typeof mosqueFormSchema>) => {
