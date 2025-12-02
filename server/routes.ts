@@ -723,6 +723,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== Settings Routes =====
+  
+  app.get("/api/settings", async (req, res) => {
+    try {
+      const allSettings = await storage.getAllSettings();
+      const settingsMap: Record<string, string> = {};
+      allSettings.forEach(s => {
+        settingsMap[s.key] = s.value;
+      });
+      
+      // Default values if not set
+      if (!settingsMap.sabgujariDay) settingsMap.sabgujariDay = "thursday";
+      if (!settingsMap.mashwaraDay) settingsMap.mashwaraDay = "monday";
+      
+      res.json({ settings: settingsMap });
+    } catch (error) {
+      console.error("Get settings error:", error);
+      res.status(500).json({ error: "সেটিংস লোড করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  app.put("/api/settings", requireAuth, requireRole("super_admin"), async (req, res) => {
+    try {
+      const { key, value } = req.body;
+      if (!key || !value) {
+        return res.status(400).json({ error: "কী এবং ভ্যালু প্রয়োজন" });
+      }
+      
+      const setting = await storage.setSetting(key, value);
+      res.json({ setting });
+    } catch (error) {
+      console.error("Update setting error:", error);
+      res.status(500).json({ error: "সেটিংস আপডেট করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // ===== Individual Member/Mosque/Halqa GET Routes =====
+
+  app.get("/api/members/:id", requireAuth, async (req, res) => {
+    try {
+      const member = await storage.getUser(req.params.id);
+      if (!member) {
+        return res.status(404).json({ error: "সাথী পাওয়া যায়নি" });
+      }
+      const { password, ...memberWithoutPassword } = member;
+      res.json({ member: memberWithoutPassword });
+    } catch (error) {
+      console.error("Get member error:", error);
+      res.status(500).json({ error: "সাথী লোড করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  app.get("/api/mosques/:id", async (req, res) => {
+    try {
+      const mosque = await storage.getMosque(req.params.id);
+      if (!mosque) {
+        return res.status(404).json({ error: "মসজিদ পাওয়া যায়নি" });
+      }
+      res.json({ mosque });
+    } catch (error) {
+      console.error("Get mosque error:", error);
+      res.status(500).json({ error: "মসজিদ লোড করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  app.get("/api/halqas/:id", async (req, res) => {
+    try {
+      const halqa = await storage.getHalqa(req.params.id);
+      if (!halqa) {
+        return res.status(404).json({ error: "হালকা পাওয়া যায়নি" });
+      }
+      res.json({ halqa });
+    } catch (error) {
+      console.error("Get halqa error:", error);
+      res.status(500).json({ error: "হালকা লোড করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

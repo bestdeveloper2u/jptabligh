@@ -7,6 +7,7 @@ import {
   unions,
   mosques,
   halqas,
+  settings,
   type User,
   type InsertUser,
   type Thana,
@@ -17,6 +18,8 @@ import {
   type InsertMosque,
   type Halqa,
   type InsertHalqa,
+  type Setting,
+  type InsertSetting,
 } from "@shared/schema";
 
 if (!process.env.DATABASE_URL) {
@@ -75,6 +78,11 @@ export interface IStorage {
   bulkCreateUsers(usersList: InsertUser[]): Promise<User[]>;
   getThanaByName(nameBn: string): Promise<Thana | undefined>;
   getUnionByName(nameBn: string, thanaId: string): Promise<Union | undefined>;
+
+  // Settings methods
+  getSetting(key: string): Promise<Setting | undefined>;
+  getAllSettings(): Promise<Setting[]>;
+  setSetting(key: string, value: string): Promise<Setting>;
 }
 
 export class DbStorage implements IStorage {
@@ -304,6 +312,29 @@ export class DbStorage implements IStorage {
     const result = await db.select().from(unions).where(
       and(eq(unions.nameBn, nameBn), eq(unions.thanaId, thanaId))
     ).limit(1);
+    return result[0];
+  }
+
+  // Settings methods
+  async getSetting(key: string): Promise<Setting | undefined> {
+    const result = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
+    return result[0];
+  }
+
+  async getAllSettings(): Promise<Setting[]> {
+    return await db.select().from(settings);
+  }
+
+  async setSetting(key: string, value: string): Promise<Setting> {
+    const existing = await this.getSetting(key);
+    if (existing) {
+      const result = await db.update(settings)
+        .set({ value, updatedAt: new Date() })
+        .where(eq(settings.key, key))
+        .returning();
+      return result[0];
+    }
+    const result = await db.insert(settings).values({ key, value }).returning();
     return result[0];
   }
 }

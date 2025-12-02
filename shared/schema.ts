@@ -58,6 +58,14 @@ export const halqas = pgTable("halqas", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// App Settings
+export const settings = pgTable("settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -83,6 +91,11 @@ export const insertHalqaSchema = createInsertSchema(halqas).omit({
   membersCount: true,
 });
 
+export const insertSettingSchema = createInsertSchema(settings).omit({
+  id: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -98,6 +111,9 @@ export type InsertMosque = z.infer<typeof insertMosqueSchema>;
 
 export type Halqa = typeof halqas.$inferSelect;
 export type InsertHalqa = z.infer<typeof insertHalqaSchema>;
+
+export type Setting = typeof settings.$inferSelect;
+export type InsertSetting = z.infer<typeof insertSettingSchema>;
 
 // Login schema
 export const loginSchema = z.object({

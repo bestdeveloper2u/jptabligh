@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import type { User, Mosque, Halqa, Thana, Union } from "@shared/schema";
 
 const tabligActivities = [
@@ -32,6 +33,17 @@ const tabligActivities = [
   { id: "sat-din", label: "সাত দিনের সাথী" },
   { id: "dos-din", label: "১০ দিনের সাথী" },
 ];
+
+// Day names in Bengali
+const dayNamesBn: Record<string, string> = {
+  sunday: "রবিবার",
+  monday: "সোমবার",
+  tuesday: "মঙ্গলবার",
+  wednesday: "বুধবার",
+  thursday: "বৃহস্পতিবার",
+  friday: "শুক্রবার",
+  saturday: "শনিবার",
+};
 
 // Form schemas
 const memberFormSchema = z.object({
@@ -90,6 +102,19 @@ export default function DashboardPage() {
   const [isAddMosqueOpen, setIsAddMosqueOpen] = useState(false);
   const [isAddHalqaOpen, setIsAddHalqaOpen] = useState(false);
   const [isAddManagerOpen, setIsAddManagerOpen] = useState(false);
+  
+  // View/Edit dialog states
+  const [viewMember, setViewMember] = useState<User | null>(null);
+  const [editMember, setEditMember] = useState<User | null>(null);
+  const [viewMosque, setViewMosque] = useState<Mosque | null>(null);
+  const [editMosque, setEditMosque] = useState<Mosque | null>(null);
+  const [viewHalqa, setViewHalqa] = useState<Halqa | null>(null);
+  const [editHalqa, setEditHalqa] = useState<Halqa | null>(null);
+
+  // Fetch settings for schedule
+  const { data: settingsData } = useQuery<{ settings: { sabgujariDay: string; mashwaraDay: string } }>({
+    queryKey: ["/api/settings"],
+  });
 
   // Fetch stats
   const { data: statsData, isLoading: statsLoading } = useQuery<{ stats: {
@@ -340,6 +365,93 @@ export default function DashboardPage() {
     },
   });
 
+  // Update member mutation
+  const updateMemberMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<User> }) => {
+      await apiRequest("PUT", `/api/members/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/members"] });
+      setEditMember(null);
+      toast({
+        title: "সফল হয়েছে",
+        description: "সাথীর তথ্য আপডেট করা হয়েছে",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "ব্যর্থ হয়েছে",
+        description: error.message,
+      });
+    },
+  });
+
+  // Update mosque mutation
+  const updateMosqueMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Mosque> }) => {
+      await apiRequest("PUT", `/api/mosques/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/mosques"] });
+      setEditMosque(null);
+      toast({
+        title: "সফল হয়েছে",
+        description: "মসজিদের তথ্য আপডেট করা হয়েছে",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "ব্যর্থ হয়েছে",
+        description: error.message,
+      });
+    },
+  });
+
+  // Update halqa mutation
+  const updateHalqaMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Halqa> }) => {
+      await apiRequest("PUT", `/api/halqas/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/halqas"] });
+      setEditHalqa(null);
+      toast({
+        title: "সফল হয়েছে",
+        description: "হালকার তথ্য আপডেট করা হয়েছে",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "ব্যর্থ হয়েছে",
+        description: error.message,
+      });
+    },
+  });
+
+  // Update settings mutation
+  const updateSettingMutation = useMutation({
+    mutationFn: async ({ key, value }: { key: string; value: string }) => {
+      await apiRequest("PUT", "/api/settings", { key, value });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      toast({
+        title: "সফল হয়েছে",
+        description: "সেটিংস আপডেট করা হয়েছে",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "ব্যর্থ হয়েছে",
+        description: error.message,
+      });
+    },
+  });
+
   const stats = statsData?.stats;
   const members = membersData?.members || [];
   const mosques = mosquesData?.mosques || [];
@@ -371,6 +483,20 @@ export default function DashboardPage() {
   // Dashboard view content
   const renderDashboardView = () => (
     <div className="space-y-6">
+      {/* Schedule Info Banner */}
+      <div className="glass p-4 rounded-lg flex flex-wrap gap-4 justify-center md:justify-start items-center" data-testid="schedule-banner">
+        <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-lg">
+          <Calendar className="w-5 h-5 text-primary" />
+          <span className="font-medium">সবগুজারি:</span>
+          <span className="text-primary font-bold">{dayNamesBn[settingsData?.settings?.sabgujariDay || "thursday"]}</span>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-accent/10 rounded-lg">
+          <Calendar className="w-5 h-5 text-accent" />
+          <span className="font-medium">সাপ্তাহিক মাসোয়ারা:</span>
+          <span className="text-accent font-bold">{dayNamesBn[settingsData?.settings?.mashwaraDay || "monday"]}</span>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold mb-2">ড্যাশবোর্ড</h2>
@@ -452,8 +578,8 @@ export default function DashboardPage() {
                   union={getUnionName(member.unionId)}
                   mosque={member.mosqueId || ""}
                   activities={member.tabligActivities || []}
-                  onView={() => console.log("View:", member.id)}
-                  onEdit={() => console.log("Edit:", member.id)}
+                  onView={() => setViewMember(member)}
+                  onEdit={canManage ? () => setEditMember(member) : undefined}
                   onDelete={isSuperAdmin ? () => handleDeleteMember(member.id) : undefined}
                 />
               ))}
@@ -493,8 +619,8 @@ export default function DashboardPage() {
                   address={mosque.address}
                   phone={mosque.phone || ""}
                   membersCount={0}
-                  onView={() => console.log("View:", mosque.id)}
-                  onEdit={canManage ? () => console.log("Edit:", mosque.id) : undefined}
+                  onView={() => setViewMosque(mosque)}
+                  onEdit={canManage ? () => setEditMosque(mosque) : undefined}
                   onDelete={canManage ? () => handleDeleteMosque(mosque.id) : undefined}
                 />
               ))}
@@ -533,8 +659,8 @@ export default function DashboardPage() {
                   union={getUnionName(halqa.unionId)}
                   membersCount={halqa.membersCount}
                   createdDate={new Date(halqa.createdAt).toLocaleDateString('bn-BD')}
-                  onView={() => console.log("View:", halqa.id)}
-                  onEdit={canManage ? () => console.log("Edit:", halqa.id) : undefined}
+                  onView={() => setViewHalqa(halqa)}
+                  onEdit={canManage ? () => setEditHalqa(halqa) : undefined}
                   onDelete={canManage ? () => handleDeleteHalqa(halqa.id) : undefined}
                 />
               ))}
@@ -592,8 +718,8 @@ export default function DashboardPage() {
               union={getUnionName(member.unionId)}
               mosque={member.mosqueId || ""}
               activities={member.tabligActivities || []}
-              onView={() => console.log("View:", member.id)}
-              onEdit={() => console.log("Edit:", member.id)}
+              onView={() => setViewMember(member)}
+              onEdit={canManage ? () => setEditMember(member) : undefined}
               onDelete={isSuperAdmin ? () => handleDeleteMember(member.id) : undefined}
             />
           ))}
@@ -649,8 +775,8 @@ export default function DashboardPage() {
               address={mosque.address}
               phone={mosque.phone || ""}
               membersCount={0}
-              onView={() => console.log("View:", mosque.id)}
-              onEdit={canManage ? () => console.log("Edit:", mosque.id) : undefined}
+              onView={() => setViewMosque(mosque)}
+              onEdit={canManage ? () => setEditMosque(mosque) : undefined}
               onDelete={canManage ? () => handleDeleteMosque(mosque.id) : undefined}
             />
           ))}
@@ -705,8 +831,8 @@ export default function DashboardPage() {
               union={getUnionName(halqa.unionId)}
               membersCount={halqa.membersCount}
               createdDate={new Date(halqa.createdAt).toLocaleDateString('bn-BD')}
-              onView={() => console.log("View:", halqa.id)}
-              onEdit={canManage ? () => console.log("Edit:", halqa.id) : undefined}
+              onView={() => setViewHalqa(halqa)}
+              onEdit={canManage ? () => setEditHalqa(halqa) : undefined}
               onDelete={canManage ? () => handleDeleteHalqa(halqa.id) : undefined}
             />
           ))}
@@ -1242,6 +1368,51 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Schedule Settings - Super Admin Only */}
+        {isSuperAdmin && (
+          <div className="glass p-6 rounded-lg space-y-4">
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              সাপ্তাহিক সিডিউল সেটিংস
+            </h3>
+            <p className="text-muted-foreground mb-4">সবগুজারি এবং মাসোয়ারার দিন নির্ধারণ করুন</p>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>সবগুজারির দিন</Label>
+                <Select 
+                  value={settingsData?.settings?.sabgujariDay || "thursday"}
+                  onValueChange={(value) => updateSettingMutation.mutate({ key: "sabgujariDay", value })}
+                >
+                  <SelectTrigger data-testid="select-sabgujari-day">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(dayNamesBn).map(([key, name]) => (
+                      <SelectItem key={key} value={key}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>সাপ্তাহিক মাসোয়ারার দিন</Label>
+                <Select 
+                  value={settingsData?.settings?.mashwaraDay || "monday"}
+                  onValueChange={(value) => updateSettingMutation.mutate({ key: "mashwaraDay", value })}
+                >
+                  <SelectTrigger data-testid="select-mashwara-day">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(dayNamesBn).map(([key, name]) => (
+                      <SelectItem key={key} value={key}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Statistics Section */}
         <div className="glass p-6 rounded-lg space-y-4">
           <h3 className="text-xl font-semibold mb-4">সংক্ষিপ্ত পরিসংখ্যান</h3>
@@ -1348,6 +1519,180 @@ export default function DashboardPage() {
         isLoading={createManagerMutation.isPending}
         thanas={thanas}
       />
+
+      {/* View Member Dialog */}
+      <Dialog open={!!viewMember} onOpenChange={() => setViewMember(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>সাথীর বিস্তারিত তথ্য</DialogTitle>
+          </DialogHeader>
+          {viewMember && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-sm">নাম</Label>
+                  <p className="font-medium">{viewMember.name}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">মোবাইল</Label>
+                  <p className="font-medium">{viewMember.phone}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">ইমেইল</Label>
+                  <p className="font-medium">{viewMember.email || "যোগ করা হয়নি"}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">থানা</Label>
+                  <p className="font-medium">{getThanaName(viewMember.thanaId)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">ইউনিয়ন</Label>
+                  <p className="font-medium">{getUnionName(viewMember.unionId)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">তাবলীগ কার্যক্রম</Label>
+                  <p className="font-medium">
+                    {viewMember.tabligActivities?.length 
+                      ? viewMember.tabligActivities.map(a => tabligActivities.find(t => t.id === a)?.label || a).join(", ")
+                      : "নেই"}
+                  </p>
+                </div>
+              </div>
+              <Button onClick={() => setViewMember(null)} className="w-full">বন্ধ করুন</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={!!editMember} onOpenChange={() => setEditMember(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>সাথীর তথ্য সম্পাদনা</DialogTitle>
+          </DialogHeader>
+          {editMember && (
+            <EditMemberForm
+              member={editMember}
+              thanas={thanas}
+              onSubmit={(data) => updateMemberMutation.mutate({ id: editMember.id, data })}
+              onCancel={() => setEditMember(null)}
+              isLoading={updateMemberMutation.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View Mosque Dialog */}
+      <Dialog open={!!viewMosque} onOpenChange={() => setViewMosque(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>মসজিদের বিস্তারিত তথ্য</DialogTitle>
+          </DialogHeader>
+          {viewMosque && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-sm">নাম</Label>
+                  <p className="font-medium">{viewMosque.name}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">ঠিকানা</Label>
+                  <p className="font-medium">{viewMosque.address}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">থানা</Label>
+                  <p className="font-medium">{getThanaName(viewMosque.thanaId)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">ইউনিয়ন</Label>
+                  <p className="font-medium">{getUnionName(viewMosque.unionId)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">ইমামের ফোন</Label>
+                  <p className="font-medium">{viewMosque.imamPhone || "যোগ করা হয়নি"}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">মুয়াজ্জিনের ফোন</Label>
+                  <p className="font-medium">{viewMosque.muazzinPhone || "যোগ করা হয়নি"}</p>
+                </div>
+              </div>
+              <Button onClick={() => setViewMosque(null)} className="w-full">বন্ধ করুন</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Mosque Dialog */}
+      <Dialog open={!!editMosque} onOpenChange={() => setEditMosque(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>মসজিদের তথ্য সম্পাদনা</DialogTitle>
+          </DialogHeader>
+          {editMosque && (
+            <EditMosqueForm
+              mosque={editMosque}
+              thanas={thanas}
+              onSubmit={(data) => updateMosqueMutation.mutate({ id: editMosque.id, data })}
+              onCancel={() => setEditMosque(null)}
+              isLoading={updateMosqueMutation.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View Halqa Dialog */}
+      <Dialog open={!!viewHalqa} onOpenChange={() => setViewHalqa(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>হালকার বিস্তারিত তথ্য</DialogTitle>
+          </DialogHeader>
+          {viewHalqa && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-sm">নাম</Label>
+                  <p className="font-medium">{viewHalqa.name}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">থানা</Label>
+                  <p className="font-medium">{getThanaName(viewHalqa.thanaId)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">ইউনিয়ন</Label>
+                  <p className="font-medium">{getUnionName(viewHalqa.unionId)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">সদস্য সংখ্যা</Label>
+                  <p className="font-medium">{viewHalqa.membersCount} জন</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">তৈরির তারিখ</Label>
+                  <p className="font-medium">{new Date(viewHalqa.createdAt).toLocaleDateString('bn-BD')}</p>
+                </div>
+              </div>
+              <Button onClick={() => setViewHalqa(null)} className="w-full">বন্ধ করুন</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Halqa Dialog */}
+      <Dialog open={!!editHalqa} onOpenChange={() => setEditHalqa(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>হালকার তথ্য সম্পাদনা</DialogTitle>
+          </DialogHeader>
+          {editHalqa && (
+            <EditHalqaForm
+              halqa={editHalqa}
+              thanas={thanas}
+              onSubmit={(data) => updateHalqaMutation.mutate({ id: editHalqa.id, data })}
+              onCancel={() => setEditHalqa(null)}
+              isLoading={updateHalqaMutation.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -2207,5 +2552,288 @@ function AddManagerDialog({
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Edit Member Form Component
+function EditMemberForm({
+  member,
+  thanas,
+  onSubmit,
+  onCancel,
+  isLoading,
+}: {
+  member: User;
+  thanas: Thana[];
+  onSubmit: (data: Partial<User>) => void;
+  onCancel: () => void;
+  isLoading: boolean;
+}) {
+  const [selectedThana, setSelectedThana] = useState(member.thanaId);
+  const [selectedUnion, setSelectedUnion] = useState(member.unionId);
+  const [name, setName] = useState(member.name);
+  const [phone, setPhone] = useState(member.phone);
+  const [email, setEmail] = useState(member.email || "");
+  const [activities, setActivities] = useState<string[]>(member.tabligActivities || []);
+
+  const { data: unionsData } = useQuery<{ unions: Union[] }>({
+    queryKey: ["/api/unions", { thanaId: selectedThana }],
+    enabled: !!selectedThana,
+  });
+
+  const unions = unionsData?.unions || [];
+
+  const handleActivityToggle = (activityId: string) => {
+    setActivities(prev => 
+      prev.includes(activityId) 
+        ? prev.filter(id => id !== activityId) 
+        : [...prev, activityId]
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({
+      name,
+      phone,
+      email: email || undefined,
+      thanaId: selectedThana,
+      unionId: selectedUnion,
+      tabligActivities: activities,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>নাম</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="space-y-2">
+          <Label>মোবাইল</Label>
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} required />
+        </div>
+        <div className="space-y-2">
+          <Label>ইমেইল</Label>
+          <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+        </div>
+        <div className="space-y-2">
+          <Label>থানা</Label>
+          <Select value={selectedThana} onValueChange={(v) => { setSelectedThana(v); setSelectedUnion(""); }}>
+            <SelectTrigger>
+              <SelectValue placeholder="থানা নির্বাচন করুন" />
+            </SelectTrigger>
+            <SelectContent>
+              {thanas.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.nameBn}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>ইউনিয়ন</Label>
+          <Select value={selectedUnion} onValueChange={setSelectedUnion} disabled={!selectedThana}>
+            <SelectTrigger>
+              <SelectValue placeholder="ইউনিয়ন নির্বাচন করুন" />
+            </SelectTrigger>
+            <SelectContent>
+              {unions.map((u) => (
+                <SelectItem key={u.id} value={u.id}>{u.nameBn}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>তাবলীগ কার্যক্রম</Label>
+        <div className="flex flex-wrap gap-2">
+          {tabligActivities.map((activity) => (
+            <Badge
+              key={activity.id}
+              variant={activities.includes(activity.id) ? "default" : "outline"}
+              className="cursor-pointer"
+              onClick={() => handleActivityToggle(activity.id)}
+            >
+              {activity.label}
+            </Badge>
+          ))}
+        </div>
+      </div>
+      <div className="flex justify-end gap-3">
+        <Button type="button" variant="outline" onClick={onCancel}>বাতিল</Button>
+        <Button type="submit" disabled={isLoading}>{isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}</Button>
+      </div>
+    </form>
+  );
+}
+
+// Edit Mosque Form Component
+function EditMosqueForm({
+  mosque,
+  thanas,
+  onSubmit,
+  onCancel,
+  isLoading,
+}: {
+  mosque: Mosque;
+  thanas: Thana[];
+  onSubmit: (data: Partial<Mosque>) => void;
+  onCancel: () => void;
+  isLoading: boolean;
+}) {
+  const [selectedThana, setSelectedThana] = useState(mosque.thanaId);
+  const [selectedUnion, setSelectedUnion] = useState(mosque.unionId);
+  const [name, setName] = useState(mosque.name);
+  const [address, setAddress] = useState(mosque.address);
+  const [imamPhone, setImamPhone] = useState(mosque.imamPhone || "");
+  const [muazzinPhone, setMuazzinPhone] = useState(mosque.muazzinPhone || "");
+
+  const { data: unionsData } = useQuery<{ unions: Union[] }>({
+    queryKey: ["/api/unions", { thanaId: selectedThana }],
+    enabled: !!selectedThana,
+  });
+
+  const unions = unionsData?.unions || [];
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({
+      name,
+      address,
+      thanaId: selectedThana,
+      unionId: selectedUnion,
+      imamPhone: imamPhone || undefined,
+      muazzinPhone: muazzinPhone || undefined,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>নাম</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="space-y-2">
+          <Label>ঠিকানা</Label>
+          <Input value={address} onChange={(e) => setAddress(e.target.value)} required />
+        </div>
+        <div className="space-y-2">
+          <Label>থানা</Label>
+          <Select value={selectedThana} onValueChange={(v) => { setSelectedThana(v); setSelectedUnion(""); }}>
+            <SelectTrigger>
+              <SelectValue placeholder="থানা নির্বাচন করুন" />
+            </SelectTrigger>
+            <SelectContent>
+              {thanas.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.nameBn}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>ইউনিয়ন</Label>
+          <Select value={selectedUnion} onValueChange={setSelectedUnion} disabled={!selectedThana}>
+            <SelectTrigger>
+              <SelectValue placeholder="ইউনিয়ন নির্বাচন করুন" />
+            </SelectTrigger>
+            <SelectContent>
+              {unions.map((u) => (
+                <SelectItem key={u.id} value={u.id}>{u.nameBn}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>ইমামের ফোন</Label>
+          <Input value={imamPhone} onChange={(e) => setImamPhone(e.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label>মুয়াজ্জিনের ফোন</Label>
+          <Input value={muazzinPhone} onChange={(e) => setMuazzinPhone(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex justify-end gap-3">
+        <Button type="button" variant="outline" onClick={onCancel}>বাতিল</Button>
+        <Button type="submit" disabled={isLoading}>{isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}</Button>
+      </div>
+    </form>
+  );
+}
+
+// Edit Halqa Form Component
+function EditHalqaForm({
+  halqa,
+  thanas,
+  onSubmit,
+  onCancel,
+  isLoading,
+}: {
+  halqa: Halqa;
+  thanas: Thana[];
+  onSubmit: (data: Partial<Halqa>) => void;
+  onCancel: () => void;
+  isLoading: boolean;
+}) {
+  const [selectedThana, setSelectedThana] = useState(halqa.thanaId);
+  const [selectedUnion, setSelectedUnion] = useState(halqa.unionId);
+  const [name, setName] = useState(halqa.name);
+
+  const { data: unionsData } = useQuery<{ unions: Union[] }>({
+    queryKey: ["/api/unions", { thanaId: selectedThana }],
+    enabled: !!selectedThana,
+  });
+
+  const unions = unionsData?.unions || [];
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({
+      name,
+      thanaId: selectedThana,
+      unionId: selectedUnion,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label>নাম</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} required />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>থানা</Label>
+          <Select value={selectedThana} onValueChange={(v) => { setSelectedThana(v); setSelectedUnion(""); }}>
+            <SelectTrigger>
+              <SelectValue placeholder="থানা নির্বাচন করুন" />
+            </SelectTrigger>
+            <SelectContent>
+              {thanas.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.nameBn}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>ইউনিয়ন</Label>
+          <Select value={selectedUnion} onValueChange={setSelectedUnion} disabled={!selectedThana}>
+            <SelectTrigger>
+              <SelectValue placeholder="ইউনিয়ন নির্বাচন করুন" />
+            </SelectTrigger>
+            <SelectContent>
+              {unions.map((u) => (
+                <SelectItem key={u.id} value={u.id}>{u.nameBn}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="flex justify-end gap-3">
+        <Button type="button" variant="outline" onClick={onCancel}>বাতিল</Button>
+        <Button type="submit" disabled={isLoading}>{isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}</Button>
+      </div>
+    </form>
   );
 }
