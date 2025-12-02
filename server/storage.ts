@@ -7,6 +7,7 @@ import {
   unions,
   mosques,
   halqas,
+  takajas,
   settings,
   type User,
   type InsertUser,
@@ -18,6 +19,8 @@ import {
   type InsertMosque,
   type Halqa,
   type InsertHalqa,
+  type Takaja,
+  type InsertTakaja,
   type Setting,
   type InsertSetting,
 } from "@shared/schema";
@@ -57,7 +60,9 @@ export interface IStorage {
   getMosque(id: string): Promise<Mosque | undefined>;
   getMosquesByThana(thanaId: string): Promise<Mosque[]>;
   getMosquesByUnion(unionId: string): Promise<Mosque[]>;
+  getMosquesByHalqa(halqaId: string): Promise<Mosque[]>;
   searchMosques(query: string, thanaId?: string, unionId?: string): Promise<Mosque[]>;
+  filterMosques(query?: string, thanaId?: string, unionId?: string, halqaId?: string): Promise<Mosque[]>;
   createMosque(mosque: InsertMosque): Promise<Mosque>;
   updateMosque(id: string, mosque: Partial<InsertMosque>): Promise<Mosque | undefined>;
   deleteMosque(id: string): Promise<boolean>;
@@ -68,9 +73,11 @@ export interface IStorage {
   getHalqasByThana(thanaId: string): Promise<Halqa[]>;
   getHalqasByUnion(unionId: string): Promise<Halqa[]>;
   searchHalqas(query: string, thanaId?: string, unionId?: string): Promise<Halqa[]>;
+  filterHalqas(query?: string, thanaId?: string, unionId?: string): Promise<Halqa[]>;
   createHalqa(halqa: InsertHalqa): Promise<Halqa>;
   updateHalqa(id: string, halqa: Partial<InsertHalqa>): Promise<Halqa | undefined>;
   deleteHalqa(id: string): Promise<boolean>;
+  getMembersByHalqa(halqaId: string): Promise<User[]>;
 
   // Bulk import methods
   bulkCreateMosques(mosquesList: InsertMosque[]): Promise<Mosque[]>;
@@ -83,6 +90,17 @@ export interface IStorage {
   getSetting(key: string): Promise<Setting | undefined>;
   getAllSettings(): Promise<Setting[]>;
   setSetting(key: string, value: string): Promise<Setting>;
+
+  // Takaja methods
+  getAllTakajas(): Promise<Takaja[]>;
+  getTakaja(id: string): Promise<Takaja | undefined>;
+  getTakajasByHalqa(halqaId: string): Promise<Takaja[]>;
+  getTakajasByAssignee(userId: string): Promise<Takaja[]>;
+  createTakaja(takaja: InsertTakaja): Promise<Takaja>;
+  updateTakaja(id: string, takaja: Partial<InsertTakaja>): Promise<Takaja | undefined>;
+  deleteTakaja(id: string): Promise<boolean>;
+  assignTakaja(takajaId: string, userId: string | null): Promise<Takaja | undefined>;
+  completeTakaja(id: string): Promise<Takaja | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -205,6 +223,10 @@ export class DbStorage implements IStorage {
     return await db.select().from(mosques).where(eq(mosques.unionId, unionId));
   }
 
+  async getMosquesByHalqa(halqaId: string): Promise<Mosque[]> {
+    return await db.select().from(mosques).where(eq(mosques.halqaId, halqaId));
+  }
+
   async searchMosques(query: string, thanaId?: string, unionId?: string): Promise<Mosque[]> {
     const conditions = [
       or(
@@ -218,6 +240,35 @@ export class DbStorage implements IStorage {
     }
     if (unionId && unionId !== "all") {
       conditions.push(eq(mosques.unionId, unionId));
+    }
+
+    return await db.select().from(mosques).where(and(...conditions));
+  }
+
+  async filterMosques(query?: string, thanaId?: string, unionId?: string, halqaId?: string): Promise<Mosque[]> {
+    const conditions: any[] = [];
+
+    if (query && query.trim() !== "") {
+      conditions.push(
+        or(
+          ilike(mosques.name, `%${query}%`),
+          ilike(mosques.address, `%${query}%`)
+        )
+      );
+    }
+
+    if (thanaId && thanaId !== "all") {
+      conditions.push(eq(mosques.thanaId, thanaId));
+    }
+    if (unionId && unionId !== "all") {
+      conditions.push(eq(mosques.unionId, unionId));
+    }
+    if (halqaId && halqaId !== "all") {
+      conditions.push(eq(mosques.halqaId, halqaId));
+    }
+
+    if (conditions.length === 0) {
+      return await db.select().from(mosques);
     }
 
     return await db.select().from(mosques).where(and(...conditions));
@@ -267,6 +318,31 @@ export class DbStorage implements IStorage {
     }
 
     return await db.select().from(halqas).where(and(...conditions));
+  }
+
+  async filterHalqas(query?: string, thanaId?: string, unionId?: string): Promise<Halqa[]> {
+    const conditions: any[] = [];
+
+    if (query && query.trim() !== "") {
+      conditions.push(ilike(halqas.name, `%${query}%`));
+    }
+
+    if (thanaId && thanaId !== "all") {
+      conditions.push(eq(halqas.thanaId, thanaId));
+    }
+    if (unionId && unionId !== "all") {
+      conditions.push(eq(halqas.unionId, unionId));
+    }
+
+    if (conditions.length === 0) {
+      return await db.select().from(halqas);
+    }
+
+    return await db.select().from(halqas).where(and(...conditions));
+  }
+
+  async getMembersByHalqa(halqaId: string): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.halqaId, halqaId));
   }
 
   async createHalqa(halqa: InsertHalqa): Promise<Halqa> {
@@ -335,6 +411,61 @@ export class DbStorage implements IStorage {
       return result[0];
     }
     const result = await db.insert(settings).values({ key, value }).returning();
+    return result[0];
+  }
+
+  // Takaja methods
+  async getAllTakajas(): Promise<Takaja[]> {
+    return await db.select().from(takajas);
+  }
+
+  async getTakaja(id: string): Promise<Takaja | undefined> {
+    const result = await db.select().from(takajas).where(eq(takajas.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getTakajasByHalqa(halqaId: string): Promise<Takaja[]> {
+    return await db.select().from(takajas).where(eq(takajas.halqaId, halqaId));
+  }
+
+  async getTakajasByAssignee(userId: string): Promise<Takaja[]> {
+    return await db.select().from(takajas).where(eq(takajas.assignedTo, userId));
+  }
+
+  async createTakaja(takaja: InsertTakaja): Promise<Takaja> {
+    const result = await db.insert(takajas).values(takaja).returning();
+    return result[0];
+  }
+
+  async updateTakaja(id: string, takaja: Partial<InsertTakaja>): Promise<Takaja | undefined> {
+    const result = await db.update(takajas).set(takaja).where(eq(takajas.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteTakaja(id: string): Promise<boolean> {
+    const result = await db.delete(takajas).where(eq(takajas.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async assignTakaja(takajaId: string, userId: string | null): Promise<Takaja | undefined> {
+    const result = await db.update(takajas)
+      .set({ 
+        assignedTo: userId,
+        status: userId ? "in_progress" : "pending"
+      })
+      .where(eq(takajas.id, takajaId))
+      .returning();
+    return result[0];
+  }
+
+  async completeTakaja(id: string): Promise<Takaja | undefined> {
+    const result = await db.update(takajas)
+      .set({ 
+        status: "completed",
+        completedAt: new Date()
+      })
+      .where(eq(takajas.id, id))
+      .returning();
     return result[0];
   }
 }

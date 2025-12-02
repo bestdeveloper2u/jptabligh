@@ -9,6 +9,7 @@ import {
   loginSchema,
   insertMosqueSchema,
   insertHalqaSchema,
+  insertTakajaSchema,
   type User,
 } from "@shared/schema";
 import { fromError } from "zod-validation-error";
@@ -182,19 +183,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/mosques", async (req, res) => {
     try {
-      const { search, thanaId, unionId } = req.query;
+      const { search, thanaId, unionId, halqaId } = req.query;
 
       let mosques;
-      if (search) {
-        mosques = await storage.searchMosques(
+      if (search || (thanaId && thanaId !== "all") || (unionId && unionId !== "all") || (halqaId && halqaId !== "all")) {
+        mosques = await storage.filterMosques(
           search as string,
           thanaId as string,
-          unionId as string
+          unionId as string,
+          halqaId as string
         );
-      } else if (thanaId && thanaId !== "all") {
-        mosques = await storage.getMosquesByThana(thanaId as string);
-      } else if (unionId && unionId !== "all") {
-        mosques = await storage.getMosquesByUnion(unionId as string);
       } else {
         mosques = await storage.getAllMosques();
       }
@@ -254,16 +252,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { search, thanaId, unionId } = req.query;
 
       let halqas;
-      if (search) {
-        halqas = await storage.searchHalqas(
+      if (search || (thanaId && thanaId !== "all") || (unionId && unionId !== "all")) {
+        halqas = await storage.filterHalqas(
           search as string,
           thanaId as string,
           unionId as string
         );
-      } else if (thanaId && thanaId !== "all") {
-        halqas = await storage.getHalqasByThana(thanaId as string);
-      } else if (unionId && unionId !== "all") {
-        halqas = await storage.getHalqasByUnion(unionId as string);
       } else {
         halqas = await storage.getAllHalqas();
       }
@@ -798,6 +792,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get halqa error:", error);
       res.status(500).json({ error: "হালকা লোড করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // ===== Takaja (তাকাজা) Routes =====
+
+  // Get all takajas
+  app.get("/api/takajas", requireAuth, async (req, res) => {
+    try {
+      const { halqaId, assignedTo } = req.query;
+      let takajasList;
+      
+      if (halqaId) {
+        takajasList = await storage.getTakajasByHalqa(halqaId as string);
+      } else if (assignedTo) {
+        takajasList = await storage.getTakajasByAssignee(assignedTo as string);
+      } else {
+        takajasList = await storage.getAllTakajas();
+      }
+      
+      res.json({ takajas: takajasList });
+    } catch (error) {
+      console.error("Get takajas error:", error);
+      res.status(500).json({ error: "তাকাজা লোড করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // Get single takaja
+  app.get("/api/takajas/:id", requireAuth, async (req, res) => {
+    try {
+      const takaja = await storage.getTakaja(req.params.id);
+      if (!takaja) {
+        return res.status(404).json({ error: "তাকাজা পাওয়া যায়নি" });
+      }
+      res.json({ takaja });
+    } catch (error) {
+      console.error("Get takaja error:", error);
+      res.status(500).json({ error: "তাকাজা লোড করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // Create takaja
+  app.post("/api/takajas", requireAuth, async (req, res) => {
+    try {
+      const validatedData = insertTakajaSchema.parse(req.body);
+      const takaja = await storage.createTakaja(validatedData);
+      res.status(201).json({ takaja });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: fromError(error).message });
+      }
+      console.error("Create takaja error:", error);
+      res.status(500).json({ error: "তাকাজা তৈরি করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // Update takaja
+  app.put("/api/takajas/:id", requireAuth, async (req, res) => {
+    try {
+      const validatedData = insertTakajaSchema.partial().parse(req.body);
+      const takaja = await storage.updateTakaja(req.params.id, validatedData);
+      if (!takaja) {
+        return res.status(404).json({ error: "তাকাজা পাওয়া যায়নি" });
+      }
+      res.json({ takaja });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: fromError(error).message });
+      }
+      console.error("Update takaja error:", error);
+      res.status(500).json({ error: "তাকাজা আপডেট করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // Delete takaja
+  app.delete("/api/takajas/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteTakaja(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "তাকাজা পাওয়া যায়নি" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete takaja error:", error);
+      res.status(500).json({ error: "তাকাজা মুছতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // Assign takaja to a member
+  app.post("/api/takajas/:id/assign", requireAuth, async (req, res) => {
+    try {
+      const { userId } = req.body;
+      const takaja = await storage.assignTakaja(req.params.id, userId || null);
+      if (!takaja) {
+        return res.status(404).json({ error: "তাকাজা পাওয়া যায়নি" });
+      }
+      res.json({ takaja });
+    } catch (error) {
+      console.error("Assign takaja error:", error);
+      res.status(500).json({ error: "তাকাজা অ্যাসাইন করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // Complete takaja
+  app.post("/api/takajas/:id/complete", requireAuth, async (req, res) => {
+    try {
+      const takaja = await storage.completeTakaja(req.params.id);
+      if (!takaja) {
+        return res.status(404).json({ error: "তাকাজা পাওয়া যায়নি" });
+      }
+      res.json({ takaja });
+    } catch (error) {
+      console.error("Complete takaja error:", error);
+      res.status(500).json({ error: "তাকাজা সম্পন্ন করতে ব্যর্থ হয়েছে" });
     }
   });
 

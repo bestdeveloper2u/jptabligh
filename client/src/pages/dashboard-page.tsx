@@ -1854,7 +1854,7 @@ function AddMemberDialog({
               />
             </div>
 
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="thanaId"
@@ -1908,6 +1908,37 @@ function AddMemberDialog({
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="halqaId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>হালকা (ঐচ্ছিক)</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value}
+                      disabled={!selectedUnion}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-member-halqa">
+                          <SelectValue placeholder="হালকা নির্বাচন করুন" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {halqas.map((halqa) => (
+                          <SelectItem key={halqa.id} value={halqa.id}>
+                            {halqa.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
@@ -1938,35 +1969,6 @@ function AddMemberDialog({
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="halqaId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>হালকা (ঐচ্ছিক)</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value}
-                    disabled={!selectedUnion}
-                  >
-                    <FormControl>
-                      <SelectTrigger data-testid="select-member-halqa">
-                        <SelectValue placeholder="হালকা নির্বাচন করুন" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {halqas.map((halqa) => (
-                        <SelectItem key={halqa.id} value={halqa.id}>
-                          {halqa.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <div className="space-y-3">
               <Label className="text-base font-semibold">তাবলীগ কার্যক্রম</Label>

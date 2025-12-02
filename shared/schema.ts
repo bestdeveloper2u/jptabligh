@@ -58,6 +58,20 @@ export const halqas = pgTable("halqas", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Takajas (দাওয়াতী তাকাজা - Dawati requests/assignments)
+export const takajas = pgTable("takajas", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  halqaId: varchar("halqa_id").notNull().references(() => halqas.id, { onDelete: "cascade" }),
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed
+  priority: text("priority").notNull().default("normal"), // low, normal, high, urgent
+  dueDate: timestamp("due_date"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // App Settings
 export const settings = pgTable("settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -96,6 +110,12 @@ export const insertSettingSchema = createInsertSchema(settings).omit({
   updatedAt: true,
 });
 
+export const insertTakajaSchema = createInsertSchema(takajas).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -114,6 +134,9 @@ export type InsertHalqa = z.infer<typeof insertHalqaSchema>;
 
 export type Setting = typeof settings.$inferSelect;
 export type InsertSetting = z.infer<typeof insertSettingSchema>;
+
+export type Takaja = typeof takajas.$inferSelect;
+export type InsertTakaja = z.infer<typeof insertTakajaSchema>;
 
 // Login schema
 export const loginSchema = z.object({
