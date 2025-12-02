@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import AuthPage from "@/pages/auth-page";
 import DashboardPage from "@/pages/dashboard-page";
+import HalqaDetailsPage from "@/pages/halqa-details-page";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -32,6 +33,9 @@ function Router() {
       <Route path="/" component={AuthPage} />
       <Route path="/dashboard">
         {() => <ProtectedRoute component={DashboardPage} />}
+      </Route>
+      <Route path="/halqa/:id">
+        {() => <ProtectedRoute component={HalqaDetailsPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

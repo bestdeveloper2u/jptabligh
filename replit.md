@@ -4,7 +4,18 @@
 
 A full-stack web application for managing Tabligh (Islamic missionary) activities in the Jamalpur district of Bangladesh. The system enables tracking of members, mosques, and halqas (circles/groups) across different thanas (subdivisions) and unions. It features role-based access control with three user types: super_admin, manager, and member. The application supports Bengali and English languages with a modern glassmorphism design aesthetic.
 
-## Recent Changes (November 2025)
+## Recent Changes (December 2025)
+
+### Takaja (তাকাজা) Feature
+- Added Takaja management system for task/request assignments within halqas
+- Halqa details page accessible by clicking "বিস্তারিত" button on halqa cards
+- Features:
+  - Create takajas with title, description, priority (low/normal/high/urgent), and due date
+  - Assign takajas to specific members within the halqa
+  - Track takaja status (pending, in_progress, completed)
+  - Members can view their assigned takajas on dashboard and mark them complete
+- Database: New `takajas` table with fields for halqa association, member assignment, and status tracking
+- API Routes: Full CRUD operations plus assign/complete endpoints
 
 ### Registration Form
 - Added হালকা (Halka) field in correct order: থানা → ইউনিয়ন → হালকা → মসজিদ

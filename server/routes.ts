@@ -797,13 +797,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Takaja (তাকাজা) Routes =====
 
-  // Get all takajas
+  // Get all takajas (with role-based filtering)
   app.get("/api/takajas", requireAuth, async (req, res) => {
     try {
       const { halqaId, assignedTo } = req.query;
+      const currentUser = req.session.user!;
       let takajasList;
       
-      if (halqaId) {
+      // Members can only see their own assigned takajas
+      if (currentUser.role === "member") {
+        takajasList = await storage.getTakajasByAssignee(currentUser.id);
+      } else if (halqaId) {
         takajasList = await storage.getTakajasByHalqa(halqaId as string);
       } else if (assignedTo) {
         takajasList = await storage.getTakajasByAssignee(assignedTo as string);
@@ -879,29 +883,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Assign takaja to a member
-  app.post("/api/takajas/:id/assign", requireAuth, async (req, res) => {
+  // Assign takaja to a member (only admins/managers can assign)
+  app.post("/api/takajas/:id/assign", requireAuth, requireRole("manager", "super_admin"), async (req, res) => {
     try {
       const { userId } = req.body;
-      const takaja = await storage.assignTakaja(req.params.id, userId || null);
+      
+      // Get the takaja to find its halqa
+      const takaja = await storage.getTakaja(req.params.id);
       if (!takaja) {
         return res.status(404).json({ error: "তাকাজা পাওয়া যায়নি" });
       }
-      res.json({ takaja });
+      
+      // If assigning to a user, verify the user exists and belongs to the halqa
+      if (userId) {
+        const assignee = await storage.getUser(userId);
+        if (!assignee) {
+          return res.status(400).json({ error: "সাথী পাওয়া যায়নি" });
+        }
+        if (assignee.halqaId !== takaja.halqaId) {
+          return res.status(400).json({ error: "এই সাথী এই হালকার অন্তর্ভুক্ত নয়" });
+        }
+      }
+      
+      const updatedTakaja = await storage.assignTakaja(req.params.id, userId || null);
+      res.json({ takaja: updatedTakaja });
     } catch (error) {
       console.error("Assign takaja error:", error);
       res.status(500).json({ error: "তাকাজা অ্যাসাইন করতে ব্যর্থ হয়েছে" });
     }
   });
 
-  // Complete takaja
+  // Complete takaja (assignee or admin can complete)
   app.post("/api/takajas/:id/complete", requireAuth, async (req, res) => {
     try {
-      const takaja = await storage.completeTakaja(req.params.id);
+      const currentUser = req.session.user!;
+      const takaja = await storage.getTakaja(req.params.id);
+      
       if (!takaja) {
         return res.status(404).json({ error: "তাকাজা পাওয়া যায়নি" });
       }
-      res.json({ takaja });
+      
+      // Only assignee or admin/manager can complete
+      const isAdmin = currentUser.role === "super_admin" || currentUser.role === "manager";
+      const isAssignee = takaja.assignedTo === currentUser.id;
+      
+      if (!isAdmin && !isAssignee) {
+        return res.status(403).json({ error: "আপনি এই তাকাজা সম্পন্ন করার অনুমতি নেই" });
+      }
+      
+      const updatedTakaja = await storage.completeTakaja(req.params.id);
+      res.json({ takaja: updatedTakaja });
     } catch (error) {
       console.error("Complete takaja error:", error);
       res.status(500).json({ error: "তাকাজা সম্পন্ন করতে ব্যর্থ হয়েছে" });

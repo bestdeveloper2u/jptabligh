@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Users, Building2, MapPin, Calendar, Plus, Upload, Download } from "lucide-react";
+import { useLocation } from "wouter";
+import { Users, Building2, MapPin, Calendar, Plus, Upload, Download, ClipboardList, Clock, AlertCircle, CheckCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -23,7 +24,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import type { User, Mosque, Halqa, Thana, Union } from "@shared/schema";
+import { Card, CardContent } from "@/components/ui/card";
+import type { User, Mosque, Halqa, Thana, Union, Takaja } from "@shared/schema";
 
 const tabligActivities = [
   { id: "tin-chilla", label: "তিন চিল্লা (৩ মাস)" },
@@ -85,6 +87,7 @@ const managerFormSchema = z.object({
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [activeView, setActiveView] = useState("dashboard");
   const [search, setSearch] = useState("");
   const [thana, setThana] = useState("all");
@@ -108,7 +111,6 @@ export default function DashboardPage() {
   const [editMember, setEditMember] = useState<User | null>(null);
   const [viewMosque, setViewMosque] = useState<Mosque | null>(null);
   const [editMosque, setEditMosque] = useState<Mosque | null>(null);
-  const [viewHalqa, setViewHalqa] = useState<Halqa | null>(null);
   const [editHalqa, setEditHalqa] = useState<Halqa | null>(null);
 
   // Fetch settings for schedule
@@ -195,6 +197,35 @@ export default function DashboardPage() {
   const { data: managersData, isLoading: managersLoading } = useQuery<{ members: User[] }>({
     queryKey: ["/api/members", { role: "manager" }],
     enabled: user?.role === "super_admin",
+  });
+
+  // Fetch member's assigned takajas (API restricts to own takajas for members)
+  const { data: myTakajasData, isLoading: myTakajasLoading } = useQuery<{ takajas: Takaja[] }>({
+    queryKey: ["/api/takajas"],
+    enabled: !!user?.id && user?.role === "member",
+  });
+
+  const myTakajas = myTakajasData?.takajas || [];
+  const pendingTakajas = myTakajas.filter(t => t.status !== "completed");
+  const completedTakajas = myTakajas.filter(t => t.status === "completed");
+
+  // Navigate to halqa details page
+  const navigateToHalqaDetails = (halqaId: string) => {
+    setLocation(`/halqa/${halqaId}`);
+  };
+
+  // Complete takaja mutation for member
+  const completeTakajaMutation = useMutation({
+    mutationFn: async (takajaId: string) => {
+      return apiRequest("POST", `/api/takajas/${takajaId}/complete`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/takajas"] });
+      toast({ title: "তাকাজা সম্পন্ন হয়েছে" });
+    },
+    onError: () => {
+      toast({ title: "তাকাজা সম্পন্ন করতে ব্যর্থ হয়েছে", variant: "destructive" });
+    },
   });
 
   // Delete member mutation
@@ -497,6 +528,126 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Member's Assigned Takajas Section */}
+      {user?.role === "member" && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-5 h-5" />
+            <h2 className="text-xl font-semibold">আমার তাকাজা সমূহ</h2>
+            {pendingTakajas.length > 0 && (
+              <Badge variant="secondary">{pendingTakajas.length} টি বাকি</Badge>
+            )}
+          </div>
+          
+          {myTakajasLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-20" />
+              <Skeleton className="h-20" />
+            </div>
+          ) : pendingTakajas.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                <CheckCircle className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                <p>কোনো বাকি তাকাজা নেই</p>
+                {completedTakajas.length > 0 && (
+                  <p className="text-sm mt-2">{completedTakajas.length} টি তাকাজা সম্পন্ন করা হয়েছে</p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {pendingTakajas.map((takaja) => {
+                const priorityColors: Record<string, string> = {
+                  low: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+                  normal: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+                  high: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
+                  urgent: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+                };
+                const priorityLabels: Record<string, string> = {
+                  low: "কম",
+                  normal: "সাধারণ",
+                  high: "বেশি",
+                  urgent: "জরুরি",
+                };
+                const statusLabels: Record<string, string> = {
+                  pending: "অপেক্ষমান",
+                  in_progress: "চলমান",
+                  completed: "সম্পন্ন",
+                };
+
+                return (
+                  <Card key={takaja.id} data-testid={`my-takaja-${takaja.id}`}>
+                    <CardContent className="py-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <h3 className="font-semibold">{takaja.title}</h3>
+                            <Badge className={priorityColors[takaja.priority] || priorityColors.normal} variant="secondary">
+                              {priorityLabels[takaja.priority] || takaja.priority}
+                            </Badge>
+                            <Badge variant="outline" className="gap-1">
+                              {takaja.status === "in_progress" ? (
+                                <AlertCircle className="w-3 h-3" />
+                              ) : (
+                                <Clock className="w-3 h-3" />
+                              )}
+                              {statusLabels[takaja.status] || takaja.status}
+                            </Badge>
+                          </div>
+                          {takaja.description && (
+                            <p className="text-muted-foreground text-sm mb-2">{takaja.description}</p>
+                          )}
+                          {takaja.dueDate && (
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <Calendar className="w-4 h-4" />
+                              <span>শেষ তারিখ: {new Date(takaja.dueDate).toLocaleDateString("bn-BD")}</span>
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => completeTakajaMutation.mutate(takaja.id)}
+                          disabled={completeTakajaMutation.isPending}
+                          data-testid={`button-complete-my-takaja-${takaja.id}`}
+                        >
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          সম্পন্ন
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {completedTakajas.length > 0 && (
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                সম্পন্ন তাকাজা দেখুন ({completedTakajas.length} টি)
+              </summary>
+              <div className="mt-3 space-y-2 opacity-75">
+                {completedTakajas.map((takaja) => (
+                  <Card key={takaja.id} className="opacity-75" data-testid={`completed-takaja-${takaja.id}`}>
+                    <CardContent className="py-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span className="line-through">{takaja.title}</span>
+                        {takaja.completedAt && (
+                          <span className="text-xs text-muted-foreground">
+                            ({new Date(takaja.completedAt).toLocaleDateString("bn-BD")})
+                          </span>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold mb-2">ড্যাশবোর্ড</h2>
@@ -659,7 +810,7 @@ export default function DashboardPage() {
                   union={getUnionName(halqa.unionId)}
                   membersCount={halqa.membersCount}
                   createdDate={new Date(halqa.createdAt).toLocaleDateString('bn-BD')}
-                  onView={() => setViewHalqa(halqa)}
+                  onView={() => navigateToHalqaDetails(halqa.id)}
                   onEdit={canManage ? () => setEditHalqa(halqa) : undefined}
                   onDelete={canManage ? () => handleDeleteHalqa(halqa.id) : undefined}
                 />
@@ -831,7 +982,7 @@ export default function DashboardPage() {
               union={getUnionName(halqa.unionId)}
               membersCount={halqa.membersCount}
               createdDate={new Date(halqa.createdAt).toLocaleDateString('bn-BD')}
-              onView={() => setViewHalqa(halqa)}
+              onView={() => navigateToHalqaDetails(halqa.id)}
               onEdit={canManage ? () => setEditHalqa(halqa) : undefined}
               onDelete={canManage ? () => handleDeleteHalqa(halqa.id) : undefined}
             />
@@ -1636,42 +1787,6 @@ export default function DashboardPage() {
               onCancel={() => setEditMosque(null)}
               isLoading={updateMosqueMutation.isPending}
             />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* View Halqa Dialog */}
-      <Dialog open={!!viewHalqa} onOpenChange={() => setViewHalqa(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>হালকার বিস্তারিত তথ্য</DialogTitle>
-          </DialogHeader>
-          {viewHalqa && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground text-sm">নাম</Label>
-                  <p className="font-medium">{viewHalqa.name}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-sm">থানা</Label>
-                  <p className="font-medium">{getThanaName(viewHalqa.thanaId)}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-sm">ইউনিয়ন</Label>
-                  <p className="font-medium">{getUnionName(viewHalqa.unionId)}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-sm">সদস্য সংখ্যা</Label>
-                  <p className="font-medium">{viewHalqa.membersCount} জন</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-sm">তৈরির তারিখ</Label>
-                  <p className="font-medium">{new Date(viewHalqa.createdAt).toLocaleDateString('bn-BD')}</p>
-                </div>
-              </div>
-              <Button onClick={() => setViewHalqa(null)} className="w-full">বন্ধ করুন</Button>
-            </div>
           )}
         </DialogContent>
       </Dialog>
@@ -2571,8 +2686,8 @@ function EditMemberForm({
   onCancel: () => void;
   isLoading: boolean;
 }) {
-  const [selectedThana, setSelectedThana] = useState(member.thanaId);
-  const [selectedUnion, setSelectedUnion] = useState(member.unionId);
+  const [selectedThana, setSelectedThana] = useState(member.thanaId || "");
+  const [selectedUnion, setSelectedUnion] = useState(member.unionId || "");
   const [name, setName] = useState(member.name);
   const [phone, setPhone] = useState(member.phone);
   const [email, setEmail] = useState(member.email || "");
