@@ -19,7 +19,18 @@ A full-stack web application for managing Tabligh (Islamic missionary) activitie
 
 ### Registration Form
 - Added হালকা (Halka) field in correct order: থানা → ইউনিয়ন → হালকা → মসজিদ
-- Halka selection is optional and depends on union selection
+- Mosque (মসজিদ) and Halqa (হালকা) are now required fields for member registration
+- Cascading selection: Thana → Union → Mosque/Halqa (filtered by selected location)
+
+### Detail Pages
+- Created separate detail pages for Members (/members/:id) and Mosques (/mosques/:id)
+- Navigation from lists uses route-based pages instead of modal popups
+- Each detail page shows comprehensive information about the entity
+
+### Enhanced Filtering
+- Server-side filtering now supports halqaId and mosqueId parameters
+- Halqa details page fetches members using halqaId filter from API
+- Consistent filtering behavior across all entity views
 
 ### CSV Import/Export
 - Added CSV import functionality for members, mosques, and halqas
