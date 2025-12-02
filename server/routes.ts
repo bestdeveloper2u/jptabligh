@@ -801,7 +801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/takajas", requireAuth, async (req, res) => {
     try {
       const { halqaId, assignedTo } = req.query;
-      const currentUser = req.session.user!;
+      const currentUser = (req as any).user as User;
       let takajasList;
       
       // Members can only see their own assigned takajas
@@ -916,7 +916,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Complete takaja (assignee or admin can complete)
   app.post("/api/takajas/:id/complete", requireAuth, async (req, res) => {
     try {
-      const currentUser = req.session.user!;
+      const currentUser = (req as any).user as User;
       const takaja = await storage.getTakaja(req.params.id);
       
       if (!takaja) {
