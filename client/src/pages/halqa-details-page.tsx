@@ -73,6 +73,11 @@ export default function HalqaDetailsPage() {
 
   const { data: halqaData, isLoading: halqaLoading } = useQuery<{ halqa: Halqa }>({
     queryKey: ["/api/halqas", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/halqas/${id}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch halqa");
+      return res.json();
+    },
     enabled: !!id,
   });
 
