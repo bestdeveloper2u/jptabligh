@@ -7,6 +7,8 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import AuthPage from "@/pages/auth-page";
 import DashboardPage from "@/pages/dashboard-page";
 import HalqaDetailsPage from "@/pages/halqa-details-page";
+import MemberDetailsPage from "@/pages/member-details-page";
+import MosqueDetailsPage from "@/pages/mosque-details-page";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -36,6 +38,12 @@ function Router() {
       </Route>
       <Route path="/halqa/:id">
         {() => <ProtectedRoute component={HalqaDetailsPage} />}
+      </Route>
+      <Route path="/member/:id">
+        {() => <ProtectedRoute component={MemberDetailsPage} />}
+      </Route>
+      <Route path="/mosque/:id">
+        {() => <ProtectedRoute component={MosqueDetailsPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

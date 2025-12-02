@@ -42,7 +42,7 @@ export interface IStorage {
   deleteUser(id: string): Promise<boolean>;
   getAllUsers(): Promise<User[]>;
   getUsersByRole(role: string): Promise<User[]>;
-  searchUsers(query: string, thanaId?: string, unionId?: string): Promise<User[]>;
+  searchUsers(query: string, thanaId?: string, unionId?: string, role?: string, halqaId?: string, mosqueId?: string): Promise<User[]>;
 
   // Thana methods
   getAllThanas(): Promise<Thana[]>;
@@ -144,7 +144,7 @@ export class DbStorage implements IStorage {
     return await db.select().from(users).where(eq(users.role, role));
   }
 
-  async searchUsers(query: string, thanaId?: string, unionId?: string, role?: string): Promise<User[]> {
+  async searchUsers(query: string, thanaId?: string, unionId?: string, role?: string, halqaId?: string, mosqueId?: string): Promise<User[]> {
     const conditions: any[] = [];
 
     // Only add search condition if query is not empty
@@ -166,6 +166,12 @@ export class DbStorage implements IStorage {
     }
     if (unionId && unionId !== "all") {
       conditions.push(eq(users.unionId, unionId));
+    }
+    if (halqaId && halqaId !== "all") {
+      conditions.push(eq(users.halqaId, halqaId));
+    }
+    if (mosqueId && mosqueId !== "all") {
+      conditions.push(eq(users.mosqueId, mosqueId));
     }
 
     return await db.select().from(users).where(and(...conditions));

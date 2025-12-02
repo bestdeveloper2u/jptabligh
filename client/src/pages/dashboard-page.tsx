@@ -55,8 +55,8 @@ const memberFormSchema = z.object({
   password: z.string().min(6, "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে"),
   thanaId: z.string().min(1, "থানা নির্বাচন করুন"),
   unionId: z.string().min(1, "ইউনিয়ন নির্বাচন করুন"),
-  mosqueId: z.string().optional(),
-  halqaId: z.string().optional(),
+  mosqueId: z.string().min(1, "মসজিদ নির্বাচন করুন"),
+  halqaId: z.string().min(1, "হালকা নির্বাচন করুন"),
   tabligActivities: z.array(z.string()).optional(),
 });
 
@@ -729,7 +729,7 @@ export default function DashboardPage() {
                   union={getUnionName(member.unionId)}
                   mosque={member.mosqueId || ""}
                   activities={member.tabligActivities || []}
-                  onView={() => setViewMember(member)}
+                  onView={() => setLocation(`/member/${member.id}`)}
                   onEdit={canManage ? () => setEditMember(member) : undefined}
                   onDelete={isSuperAdmin ? () => handleDeleteMember(member.id) : undefined}
                 />
@@ -770,7 +770,7 @@ export default function DashboardPage() {
                   address={mosque.address}
                   phone={mosque.phone || ""}
                   membersCount={0}
-                  onView={() => setViewMosque(mosque)}
+                  onView={() => setLocation(`/mosque/${mosque.id}`)}
                   onEdit={canManage ? () => setEditMosque(mosque) : undefined}
                   onDelete={canManage ? () => handleDeleteMosque(mosque.id) : undefined}
                 />
@@ -869,7 +869,7 @@ export default function DashboardPage() {
               union={getUnionName(member.unionId)}
               mosque={member.mosqueId || ""}
               activities={member.tabligActivities || []}
-              onView={() => setViewMember(member)}
+              onView={() => setLocation(`/member/${member.id}`)}
               onEdit={canManage ? () => setEditMember(member) : undefined}
               onDelete={isSuperAdmin ? () => handleDeleteMember(member.id) : undefined}
             />
@@ -926,7 +926,7 @@ export default function DashboardPage() {
               address={mosque.address}
               phone={mosque.phone || ""}
               membersCount={0}
-              onView={() => setViewMosque(mosque)}
+              onView={() => setLocation(`/mosque/${mosque.id}`)}
               onEdit={canManage ? () => setEditMosque(mosque) : undefined}
               onDelete={canManage ? () => handleDeleteMosque(mosque.id) : undefined}
             />
@@ -2028,39 +2028,10 @@ function AddMemberDialog({
             <div className="grid md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="halqaId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>হালকা (ঐচ্ছিক)</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
-                      disabled={!selectedUnion}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-member-halqa">
-                          <SelectValue placeholder="হালকা নির্বাচন করুন" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {halqas.map((halqa) => (
-                          <SelectItem key={halqa.id} value={halqa.id}>
-                            {halqa.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="mosqueId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>মসজিদ (ঐচ্ছিক)</FormLabel>
+                    <FormLabel>মসজিদ *</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value}
@@ -2075,6 +2046,35 @@ function AddMemberDialog({
                         {mosques.map((mosque) => (
                           <SelectItem key={mosque.id} value={mosque.id}>
                             {mosque.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="halqaId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>হালকা *</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value}
+                      disabled={!selectedUnion}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-member-halqa">
+                          <SelectValue placeholder="হালকা নির্বাচন করুন" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {halqas.map((halqa) => (
+                          <SelectItem key={halqa.id} value={halqa.id}>
+                            {halqa.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

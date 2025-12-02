@@ -99,13 +99,12 @@ export default function HalqaDetailsPage() {
     enabled: !!id,
   });
 
-  const { data: membersData } = useQuery<{ members: UserType[] }>({
-    queryKey: ["/api/members"],
+  const { data: membersData, isLoading: membersLoading } = useQuery<{ members: UserType[] }>({
+    queryKey: ["/api/members", { halqaId: id }],
+    enabled: !!id,
   });
 
-  const halqaMembers = membersData?.members?.filter(
-    (m) => m.halqaId === id && m.role === "member"
-  ) || [];
+  const halqaMembers = membersData?.members || [];
 
   const halqa = halqaData?.halqa;
   const takajas = takajasData?.takajas || [];

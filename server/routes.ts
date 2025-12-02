@@ -315,7 +315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/members", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user as User;
-      const { search, thanaId, unionId, role } = req.query;
+      const { search, thanaId, unionId, role, halqaId, mosqueId } = req.query;
 
       // Determine target role - default to "member" if not provided or empty
       const roleString = typeof role === "string" && role.trim() !== "" ? role.trim() : "member";
@@ -330,7 +330,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (search as string) || "",
         thanaId as string,
         unionId as string,
-        roleString
+        roleString,
+        halqaId as string,
+        mosqueId as string
       );
 
       // Remove passwords
