@@ -2689,6 +2689,8 @@ function EditMemberForm({
 }) {
   const [selectedThana, setSelectedThana] = useState(member.thanaId || "");
   const [selectedUnion, setSelectedUnion] = useState(member.unionId || "");
+  const [selectedHalqa, setSelectedHalqa] = useState(member.halqaId || "");
+  const [selectedMosque, setSelectedMosque] = useState(member.mosqueId || "");
   const [name, setName] = useState(member.name);
   const [phone, setPhone] = useState(member.phone);
   const [email, setEmail] = useState(member.email || "");
@@ -2699,7 +2701,27 @@ function EditMemberForm({
     enabled: !!selectedThana,
   });
 
+  const { data: halqasData } = useQuery<{ halqas: Halqa[] }>({
+    queryKey: ["/api/halqas"],
+  });
+
+  const { data: mosquesData } = useQuery<{ mosques: Mosque[] }>({
+    queryKey: ["/api/mosques"],
+  });
+
   const unions = unionsData?.unions || [];
+  const allHalqas = halqasData?.halqas || [];
+  const allMosques = mosquesData?.mosques || [];
+
+  const filteredHalqas = allHalqas.filter(h => 
+    (!selectedThana || h.thanaId === selectedThana) &&
+    (!selectedUnion || h.unionId === selectedUnion)
+  );
+
+  const filteredMosques = allMosques.filter(m => 
+    (!selectedThana || m.thanaId === selectedThana) &&
+    (!selectedUnion || m.unionId === selectedUnion)
+  );
 
   const handleActivityToggle = (activityId: string) => {
     setActivities(prev => 
@@ -2717,6 +2739,8 @@ function EditMemberForm({
       email: email || undefined,
       thanaId: selectedThana,
       unionId: selectedUnion,
+      halqaId: selectedHalqa === "none" ? null : selectedHalqa || null,
+      mosqueId: selectedMosque === "none" ? null : selectedMosque || null,
       tabligActivities: activities,
     });
   };
@@ -2726,20 +2750,20 @@ function EditMemberForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>নাম</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} required />
+          <Input value={name} onChange={(e) => setName(e.target.value)} required data-testid="input-edit-member-name" />
         </div>
         <div className="space-y-2">
           <Label>মোবাইল</Label>
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} required />
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} required data-testid="input-edit-member-phone" />
         </div>
         <div className="space-y-2">
           <Label>ইমেইল</Label>
-          <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+          <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" data-testid="input-edit-member-email" />
         </div>
         <div className="space-y-2">
           <Label>থানা</Label>
-          <Select value={selectedThana} onValueChange={(v) => { setSelectedThana(v); setSelectedUnion(""); }}>
-            <SelectTrigger>
+          <Select value={selectedThana} onValueChange={(v) => { setSelectedThana(v); setSelectedUnion(""); setSelectedHalqa(""); setSelectedMosque(""); }}>
+            <SelectTrigger data-testid="select-edit-member-thana">
               <SelectValue placeholder="থানা নির্বাচন করুন" />
             </SelectTrigger>
             <SelectContent>
@@ -2751,13 +2775,41 @@ function EditMemberForm({
         </div>
         <div className="space-y-2">
           <Label>ইউনিয়ন</Label>
-          <Select value={selectedUnion} onValueChange={setSelectedUnion} disabled={!selectedThana}>
-            <SelectTrigger>
+          <Select value={selectedUnion} onValueChange={(v) => { setSelectedUnion(v); setSelectedHalqa(""); setSelectedMosque(""); }} disabled={!selectedThana}>
+            <SelectTrigger data-testid="select-edit-member-union">
               <SelectValue placeholder="ইউনিয়ন নির্বাচন করুন" />
             </SelectTrigger>
             <SelectContent>
               {unions.map((u) => (
                 <SelectItem key={u.id} value={u.id}>{u.nameBn}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>হালকা</Label>
+          <Select value={selectedHalqa || "none"} onValueChange={setSelectedHalqa}>
+            <SelectTrigger data-testid="select-edit-member-halqa">
+              <SelectValue placeholder="হালকা নির্বাচন করুন" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">নির্বাচন করুন</SelectItem>
+              {filteredHalqas.map((h) => (
+                <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>মসজিদ</Label>
+          <Select value={selectedMosque || "none"} onValueChange={setSelectedMosque}>
+            <SelectTrigger data-testid="select-edit-member-mosque">
+              <SelectValue placeholder="মসজিদ নির্বাচন করুন" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">নির্বাচন করুন</SelectItem>
+              {filteredMosques.map((m) => (
+                <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -2772,6 +2824,7 @@ function EditMemberForm({
               variant={activities.includes(activity.id) ? "default" : "outline"}
               className="cursor-pointer"
               onClick={() => handleActivityToggle(activity.id)}
+              data-testid={`badge-edit-activity-${activity.id}`}
             >
               {activity.label}
             </Badge>
@@ -2780,7 +2833,7 @@ function EditMemberForm({
       </div>
       <div className="flex justify-end gap-3">
         <Button type="button" variant="outline" onClick={onCancel}>বাতিল</Button>
-        <Button type="submit" disabled={isLoading}>{isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}</Button>
+        <Button type="submit" disabled={isLoading} data-testid="button-save-edit-member">{isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}</Button>
       </div>
     </form>
   );
@@ -2802,6 +2855,7 @@ function EditMosqueForm({
 }) {
   const [selectedThana, setSelectedThana] = useState(mosque.thanaId);
   const [selectedUnion, setSelectedUnion] = useState(mosque.unionId);
+  const [selectedHalqa, setSelectedHalqa] = useState(mosque.halqaId || "");
   const [name, setName] = useState(mosque.name);
   const [address, setAddress] = useState(mosque.address);
   const [imamPhone, setImamPhone] = useState(mosque.imamPhone || "");
@@ -2812,7 +2866,17 @@ function EditMosqueForm({
     enabled: !!selectedThana,
   });
 
+  const { data: halqasData } = useQuery<{ halqas: Halqa[] }>({
+    queryKey: ["/api/halqas"],
+  });
+
   const unions = unionsData?.unions || [];
+  const allHalqas = halqasData?.halqas || [];
+
+  const filteredHalqas = allHalqas.filter(h => 
+    (!selectedThana || h.thanaId === selectedThana) &&
+    (!selectedUnion || h.unionId === selectedUnion)
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2821,6 +2885,7 @@ function EditMosqueForm({
       address,
       thanaId: selectedThana,
       unionId: selectedUnion,
+      halqaId: selectedHalqa === "none" ? null : selectedHalqa || null,
       imamPhone: imamPhone || undefined,
       muazzinPhone: muazzinPhone || undefined,
     });
@@ -2831,16 +2896,16 @@ function EditMosqueForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>নাম</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} required />
+          <Input value={name} onChange={(e) => setName(e.target.value)} required data-testid="input-edit-mosque-name" />
         </div>
         <div className="space-y-2">
           <Label>ঠিকানা</Label>
-          <Input value={address} onChange={(e) => setAddress(e.target.value)} required />
+          <Input value={address} onChange={(e) => setAddress(e.target.value)} required data-testid="input-edit-mosque-address" />
         </div>
         <div className="space-y-2">
           <Label>থানা</Label>
-          <Select value={selectedThana} onValueChange={(v) => { setSelectedThana(v); setSelectedUnion(""); }}>
-            <SelectTrigger>
+          <Select value={selectedThana} onValueChange={(v) => { setSelectedThana(v); setSelectedUnion(""); setSelectedHalqa(""); }}>
+            <SelectTrigger data-testid="select-edit-mosque-thana">
               <SelectValue placeholder="থানা নির্বাচন করুন" />
             </SelectTrigger>
             <SelectContent>
@@ -2852,8 +2917,8 @@ function EditMosqueForm({
         </div>
         <div className="space-y-2">
           <Label>ইউনিয়ন</Label>
-          <Select value={selectedUnion} onValueChange={setSelectedUnion} disabled={!selectedThana}>
-            <SelectTrigger>
+          <Select value={selectedUnion} onValueChange={(v) => { setSelectedUnion(v); setSelectedHalqa(""); }} disabled={!selectedThana}>
+            <SelectTrigger data-testid="select-edit-mosque-union">
               <SelectValue placeholder="ইউনিয়ন নির্বাচন করুন" />
             </SelectTrigger>
             <SelectContent>
@@ -2864,17 +2929,31 @@ function EditMosqueForm({
           </Select>
         </div>
         <div className="space-y-2">
+          <Label>হালকা</Label>
+          <Select value={selectedHalqa || "none"} onValueChange={setSelectedHalqa}>
+            <SelectTrigger data-testid="select-edit-mosque-halqa">
+              <SelectValue placeholder="হালকা নির্বাচন করুন" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">নির্বাচন করুন</SelectItem>
+              {filteredHalqas.map((h) => (
+                <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
           <Label>ইমামের ফোন</Label>
-          <Input value={imamPhone} onChange={(e) => setImamPhone(e.target.value)} />
+          <Input value={imamPhone} onChange={(e) => setImamPhone(e.target.value)} data-testid="input-edit-imam-phone" />
         </div>
         <div className="space-y-2">
           <Label>মুয়াজ্জিনের ফোন</Label>
-          <Input value={muazzinPhone} onChange={(e) => setMuazzinPhone(e.target.value)} />
+          <Input value={muazzinPhone} onChange={(e) => setMuazzinPhone(e.target.value)} data-testid="input-edit-muazzin-phone" />
         </div>
       </div>
       <div className="flex justify-end gap-3">
         <Button type="button" variant="outline" onClick={onCancel}>বাতিল</Button>
-        <Button type="submit" disabled={isLoading}>{isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}</Button>
+        <Button type="submit" disabled={isLoading} data-testid="button-save-edit-mosque">{isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}</Button>
       </div>
     </form>
   );

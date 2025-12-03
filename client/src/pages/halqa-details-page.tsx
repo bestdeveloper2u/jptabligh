@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -15,18 +18,16 @@ import {
   Trash2,
   Edit,
   Phone,
-  Building2
+  Building2,
+  UserPlus
 } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,6 +42,12 @@ const takajaFormSchema = z.object({
   priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
   dueDate: z.string().optional(),
   assignedTo: z.string().optional(),
+});
+
+const halqaEditSchema = z.object({
+  name: z.string().min(1, "হালকার নাম আবশ্যক"),
+  thanaId: z.string().min(1, "থানা নির্বাচন করুন"),
+  unionId: z.string().min(1, "ইউনিয়ন নির্বাচন করুন"),
 });
 
 const priorityLabels: Record<string, { label: string; color: string }> = {
@@ -62,6 +69,8 @@ export default function HalqaDetailsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isAddTakajaOpen, setIsAddTakajaOpen] = useState(false);
+  const [isEditHalqaOpen, setIsEditHalqaOpen] = useState(false);
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedTakaja, setSelectedTakaja] = useState<Takaja | null>(null);
 
@@ -75,6 +84,17 @@ export default function HalqaDetailsPage() {
       assignedTo: "",
     },
   });
+
+  const halqaEditForm = useForm<z.infer<typeof halqaEditSchema>>({
+    resolver: zodResolver(halqaEditSchema),
+    defaultValues: {
+      name: "",
+      thanaId: "",
+      unionId: "",
+    },
+  });
+
+  const selectedEditThanaId = halqaEditForm.watch("thanaId");
 
   const { data: halqaData, isLoading: halqaLoading } = useQuery<{ halqa: Halqa }>({
     queryKey: ["/api/halqas", id],
@@ -92,6 +112,10 @@ export default function HalqaDetailsPage() {
 
   const { data: unionsData } = useQuery<{ unions: Union[] }>({
     queryKey: ["/api/unions"],
+  });
+
+  const { data: allMembersData } = useQuery<{ members: UserType[] }>({
+    queryKey: ["/api/members"],
   });
 
   const { data: takajasData, isLoading: takajasLoading } = useQuery<{ takajas: Takaja[] }>({
@@ -114,12 +138,22 @@ export default function HalqaDetailsPage() {
   });
 
   const halqaMembers = membersData?.members || [];
+  const allMembers = allMembersData?.members || [];
   const mosques = mosquesData?.mosques || [];
 
   const halqa = halqaData?.halqa;
   const takajas = takajasData?.takajas || [];
   const thanas = thanasData?.thanas || [];
   const unions = unionsData?.unions || [];
+
+  const availableMembers = useMemo(() => {
+    return allMembers.filter(m => !m.halqaId && m.role === "member");
+  }, [allMembers]);
+
+  const filteredEditUnions = useMemo(() => {
+    if (!selectedEditThanaId) return unions;
+    return unions.filter(u => u.thanaId === selectedEditThanaId);
+  }, [selectedEditThanaId, unions]);
 
   const getMosqueName = (mosqueId: string | null | undefined) => {
     if (!mosqueId) return null;
@@ -128,6 +162,67 @@ export default function HalqaDetailsPage() {
 
   const thanaName = thanas.find(t => t.id === halqa?.thanaId)?.nameBn || "";
   const unionName = unions.find(u => u.id === halqa?.unionId)?.nameBn || "";
+
+  const openEditHalqaDialog = () => {
+    if (halqa) {
+      halqaEditForm.reset({
+        name: halqa.name,
+        thanaId: halqa.thanaId,
+        unionId: halqa.unionId,
+      });
+      setIsEditHalqaOpen(true);
+    }
+  };
+
+  const updateHalqaMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof halqaEditSchema>) => {
+      await apiRequest("PUT", `/api/halqas/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/halqas", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/halqas"] });
+      setIsEditHalqaOpen(false);
+      toast({ title: "হালকার তথ্য আপডেট করা হয়েছে" });
+    },
+    onError: () => {
+      toast({ title: "হালকার তথ্য আপডেট করতে ব্যর্থ হয়েছে", variant: "destructive" });
+    },
+  });
+
+  const addMemberToHalqaMutation = useMutation({
+    mutationFn: async (memberId: string) => {
+      await apiRequest("PUT", `/api/members/${memberId}`, { halqaId: id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/members", { halqaId: id }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/halqas", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/halqas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      setIsAddMemberOpen(false);
+      toast({ title: "সাথী হালকায় যোগ করা হয়েছে" });
+    },
+    onError: () => {
+      toast({ title: "সাথী যোগ করতে ব্যর্থ হয়েছে", variant: "destructive" });
+    },
+  });
+
+  const removeMemberFromHalqaMutation = useMutation({
+    mutationFn: async (memberId: string) => {
+      await apiRequest("PUT", `/api/members/${memberId}`, { halqaId: null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/members", { halqaId: id }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/halqas", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/halqas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      toast({ title: "সাথী হালকা থেকে সরানো হয়েছে" });
+    },
+    onError: () => {
+      toast({ title: "সাথী সরাতে ব্যর্থ হয়েছে", variant: "destructive" });
+    },
+  });
 
   const createTakajaMutation = useMutation({
     mutationFn: async (data: z.infer<typeof takajaFormSchema>) => {
@@ -195,6 +290,10 @@ export default function HalqaDetailsPage() {
     createTakajaMutation.mutate(data);
   };
 
+  const handleHalqaEditSubmit = (data: z.infer<typeof halqaEditSchema>) => {
+    updateHalqaMutation.mutate(data);
+  };
+
   const handleAssign = (userId: string | null) => {
     if (selectedTakaja) {
       assignTakajaMutation.mutate({ takajaId: selectedTakaja.id, userId });
@@ -207,7 +306,7 @@ export default function HalqaDetailsPage() {
     return member?.name || "অজানা";
   };
 
-  const isAdmin = user?.role === "super_admin" || user?.role === "admin";
+  const isAdmin = user?.role === "super_admin" || user?.role === "manager";
 
   if (halqaLoading) {
     return (
@@ -235,15 +334,23 @@ export default function HalqaDetailsPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto p-6">
-        <Button
-          variant="ghost"
-          className="mb-6 gap-2"
-          onClick={() => setLocation("/dashboard")}
-          data-testid="button-back"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          ড্যাশবোর্ডে ফিরে যান
-        </Button>
+        <div className="flex items-center justify-between mb-6">
+          <Button
+            variant="ghost"
+            className="gap-2"
+            onClick={() => setLocation("/dashboard")}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            ড্যাশবোর্ডে ফিরে যান
+          </Button>
+          {isAdmin && (
+            <Button onClick={openEditHalqaDialog} data-testid="button-edit-halqa">
+              <Edit className="w-4 h-4 mr-2" />
+              হালকা সম্পাদনা
+            </Button>
+          )}
+        </div>
 
         <Card className="mb-6">
           <CardHeader>
@@ -409,6 +516,12 @@ export default function HalqaDetailsPage() {
               <h2 className="text-xl font-semibold">সাথী সমূহ</h2>
               <Badge variant="secondary">{halqaMembers.length} জন</Badge>
             </div>
+            {isAdmin && (
+              <Button onClick={() => setIsAddMemberOpen(true)} data-testid="button-add-member-to-halqa">
+                <UserPlus className="w-4 h-4 mr-2" />
+                সাথী যোগ করুন
+              </Button>
+            )}
           </div>
 
           {membersLoading ? (
@@ -422,6 +535,16 @@ export default function HalqaDetailsPage() {
               <CardContent className="py-12 text-center text-muted-foreground">
                 <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>এই হালকায় কোনো সাথী নেই</p>
+                {isAdmin && (
+                  <Button 
+                    className="mt-4" 
+                    variant="outline" 
+                    onClick={() => setIsAddMemberOpen(true)}
+                    data-testid="button-add-first-member"
+                  >
+                    প্রথম সাথী যোগ করুন
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
@@ -437,25 +560,41 @@ export default function HalqaDetailsPage() {
                     data-testid={`sathi-card-${member.id}`}
                   >
                     <CardContent className="p-4">
-                      <div className="flex items-start gap-4">
-                        <Avatar className="w-12 h-12">
-                          <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                            {initials}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-lg truncate" data-testid={`sathi-name-${member.id}`}>
-                            {member.name}
-                          </h3>
-                          <div className="flex flex-wrap gap-1.5 mt-1">
-                            <Badge variant="secondary" className="text-xs">
-                              {thanaName}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {unionName}
-                            </Badge>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-4 flex-1">
+                          <Avatar className="w-12 h-12">
+                            <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+                              {initials}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-lg truncate" data-testid={`sathi-name-${member.id}`}>
+                              {member.name}
+                            </h3>
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              <Badge variant="secondary" className="text-xs">
+                                {thanaName}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {unionName}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
+                        {isAdmin && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              if (confirm("আপনি কি নিশ্চিত যে এই সাথীকে হালকা থেকে সরাতে চান?")) {
+                                removeMemberFromHalqaMutation.mutate(member.id);
+                              }
+                            }}
+                            data-testid={`button-remove-member-${member.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        )}
                       </div>
                       
                       <div className="mt-4 space-y-2">
@@ -493,6 +632,18 @@ export default function HalqaDetailsPage() {
                           </div>
                         </div>
                       )}
+
+                      <div className="mt-3 pt-3 border-t">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full"
+                          onClick={() => setLocation(`/member/${member.id}`)}
+                          data-testid={`button-view-member-${member.id}`}
+                        >
+                          বিস্তারিত দেখুন
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 );
@@ -506,6 +657,7 @@ export default function HalqaDetailsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>নতুন তাকাজা যোগ করুন</DialogTitle>
+            <DialogDescription>হালকায় নতুন তাকাজা যোগ করুন</DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -638,10 +790,150 @@ export default function HalqaDetailsPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isEditHalqaOpen} onOpenChange={setIsEditHalqaOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>হালকা সম্পাদনা</DialogTitle>
+            <DialogDescription>হালকার তথ্য আপডেট করুন</DialogDescription>
+          </DialogHeader>
+          <Form {...halqaEditForm}>
+            <form onSubmit={halqaEditForm.handleSubmit(handleHalqaEditSubmit)} className="space-y-4">
+              <FormField
+                control={halqaEditForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>হালকার নাম</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="হালকার নাম লিখুন" 
+                        {...field} 
+                        data-testid="input-edit-halqa-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={halqaEditForm.control}
+                name="thanaId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>থানা</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-halqa-thana">
+                          <SelectValue placeholder="থানা নির্বাচন করুন" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {thanas.map((thana) => (
+                          <SelectItem key={thana.id} value={thana.id}>
+                            {thana.nameBn}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={halqaEditForm.control}
+                name="unionId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ইউনিয়ন</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-halqa-union">
+                          <SelectValue placeholder="ইউনিয়ন নির্বাচন করুন" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {filteredEditUnions.map((union) => (
+                          <SelectItem key={union.id} value={union.id}>
+                            {union.nameBn}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditHalqaOpen(false)}
+                >
+                  বাতিল
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={updateHalqaMutation.isPending}
+                  data-testid="button-save-halqa"
+                >
+                  {updateHalqaMutation.isPending ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>হালকায় সাথী যোগ করুন</DialogTitle>
+            <DialogDescription>এই হালকায় নতুন সাথী যোগ করতে নিচের তালিকা থেকে নির্বাচন করুন</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {availableMembers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>কোনো নতুন সাথী পাওয়া যায়নি</p>
+                <p className="text-sm mt-2">সব সাথী ইতিমধ্যে কোনো হালকায় যুক্ত আছে</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {availableMembers.map((member) => (
+                  <Button
+                    key={member.id}
+                    variant="outline"
+                    className="w-full justify-start gap-3"
+                    onClick={() => {
+                      addMemberToHalqaMutation.mutate(member.id);
+                    }}
+                    disabled={addMemberToHalqaMutation.isPending}
+                    data-testid={`button-add-member-${member.id}`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-medium">{member.name}</p>
+                      <p className="text-xs text-muted-foreground">{member.phone}</p>
+                    </div>
+                    <UserPlus className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>তাকাজা এসাইন করুন</DialogTitle>
+            <DialogDescription>একজন সাথীকে এই তাকাজা এসাইন করুন</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {selectedTakaja && (

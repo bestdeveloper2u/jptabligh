@@ -6,6 +6,17 @@ A full-stack web application for managing Tabligh (Islamic missionary) activitie
 
 ## Recent Changes (December 2025)
 
+### Enhanced Edit Functionality with Halqa Assignment
+- Added edit buttons to all detail pages (member, mosque, halqa)
+- Halqa selection dropdown available in member and mosque edit forms
+- Members can now be easily assigned to halqas from multiple places:
+  - Member details page edit dialog
+  - Mosque details page edit dialog
+  - Halqa details page with "সাথী যোগ করুন" (Add Member) button
+  - Dashboard edit dialogs for members and mosques
+- Added member removal feature from halqa details page
+- Cascading filters: Thana → Union → Halqa selection filters appropriately
+
 ### Takaja (তাকাজা) Feature
 - Added Takaja management system for task/request assignments within halqas
 - Halqa details page accessible by clicking "বিস্তারিত" button on halqa cards
