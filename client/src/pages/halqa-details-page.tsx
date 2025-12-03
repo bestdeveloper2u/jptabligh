@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Halqa, User as UserType, Takaja, Thana, Union, Mosque } from "@shared/schema";
 
 const takajaFormSchema = z.object({
@@ -71,8 +72,10 @@ export default function HalqaDetailsPage() {
   const [isAddTakajaOpen, setIsAddTakajaOpen] = useState(false);
   const [isEditHalqaOpen, setIsEditHalqaOpen] = useState(false);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [isAddMosqueOpen, setIsAddMosqueOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedTakaja, setSelectedTakaja] = useState<Takaja | null>(null);
+  const [activeTab, setActiveTab] = useState("takaja");
 
   const form = useForm<z.infer<typeof takajaFormSchema>>({
     resolver: zodResolver(takajaFormSchema),
@@ -133,13 +136,24 @@ export default function HalqaDetailsPage() {
     enabled: !!id,
   });
 
-  const { data: mosquesData } = useQuery<{ mosques: Mosque[] }>({
+  const { data: halqaMosquesData, isLoading: mosquesLoading } = useQuery<{ mosques: Mosque[] }>({
+    queryKey: ["/api/mosques", { halqaId: id }],
+    queryFn: async () => {
+      const res = await fetch(`/api/mosques?halqaId=${id}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch mosques");
+      return res.json();
+    },
+    enabled: !!id,
+  });
+
+  const { data: allMosquesData } = useQuery<{ mosques: Mosque[] }>({
     queryKey: ["/api/mosques"],
   });
 
   const halqaMembers = membersData?.members || [];
   const allMembers = allMembersData?.members || [];
-  const mosques = mosquesData?.mosques || [];
+  const halqaMosques = halqaMosquesData?.mosques || [];
+  const allMosques = allMosquesData?.mosques || [];
 
   const halqa = halqaData?.halqa;
   const takajas = takajasData?.takajas || [];
@@ -150,15 +164,19 @@ export default function HalqaDetailsPage() {
     return allMembers.filter(m => !m.halqaId && m.role === "member");
   }, [allMembers]);
 
+  const availableMosques = useMemo(() => {
+    if (!halqa) return [];
+    return allMosques.filter(m => 
+      !m.halqaId && 
+      m.thanaId === halqa.thanaId && 
+      m.unionId === halqa.unionId
+    );
+  }, [allMosques, halqa]);
+
   const filteredEditUnions = useMemo(() => {
     if (!selectedEditThanaId) return unions;
     return unions.filter(u => u.thanaId === selectedEditThanaId);
   }, [selectedEditThanaId, unions]);
-
-  const getMosqueName = (mosqueId: string | null | undefined) => {
-    if (!mosqueId) return null;
-    return mosques.find(m => m.id === mosqueId)?.name;
-  };
 
   const thanaName = thanas.find(t => t.id === halqa?.thanaId)?.nameBn || "";
   const unionName = unions.find(u => u.id === halqa?.unionId)?.nameBn || "";
@@ -224,12 +242,45 @@ export default function HalqaDetailsPage() {
     },
   });
 
+  const addMosqueToHalqaMutation = useMutation({
+    mutationFn: async (mosqueId: string) => {
+      await apiRequest("PUT", `/api/mosques/${mosqueId}`, { halqaId: id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/mosques", { halqaId: id }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/mosques"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/halqas", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      setIsAddMosqueOpen(false);
+      toast({ title: "মসজিদ হালকায় যোগ করা হয়েছে" });
+    },
+    onError: () => {
+      toast({ title: "মসজিদ যোগ করতে ব্যর্থ হয়েছে", variant: "destructive" });
+    },
+  });
+
+  const removeMosqueFromHalqaMutation = useMutation({
+    mutationFn: async (mosqueId: string) => {
+      await apiRequest("PUT", `/api/mosques/${mosqueId}`, { halqaId: null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/mosques", { halqaId: id }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/mosques"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/halqas", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      toast({ title: "মসজিদ হালকা থেকে সরানো হয়েছে" });
+    },
+    onError: () => {
+      toast({ title: "মসজিদ সরাতে ব্যর্থ হয়েছে", variant: "destructive" });
+    },
+  });
+
   const createTakajaMutation = useMutation({
     mutationFn: async (data: z.infer<typeof takajaFormSchema>) => {
       return apiRequest("POST", "/api/takajas", {
         ...data,
         halqaId: id,
-        dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+        dueDate: data.dueDate || null,
         assignedTo: data.assignedTo || null,
         status: data.assignedTo ? "in_progress" : "pending",
       });
@@ -367,290 +418,430 @@ export default function HalqaDetailsPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Users className="w-5 h-5" />
-                <span className="font-medium">{halqaMembers.length} জন সাথী</span>
+              <div className="flex items-center gap-4 text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  <span className="font-medium">{halqaMembers.length} জন সাথী</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  <span className="font-medium">{halqaMosques.length} টি মসজিদ</span>
+                </div>
               </div>
             </div>
           </CardHeader>
         </Card>
 
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="w-5 h-5" />
-              <h2 className="text-xl font-semibold">তাকাজা সমূহ</h2>
-            </div>
-            {isAdmin && (
-              <Button onClick={() => setIsAddTakajaOpen(true)} data-testid="button-add-takaja">
-                <Plus className="w-4 h-4 mr-2" />
-                নতুন তাকাজা
-              </Button>
-            )}
-          </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="takaja" className="gap-2" data-testid="tab-takaja">
+              <ClipboardList className="w-4 h-4" />
+              তাকাজা
+              <Badge variant="secondary" className="ml-1">{takajas.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="mosques" className="gap-2" data-testid="tab-mosques">
+              <Building2 className="w-4 h-4" />
+              মসজিদ
+              <Badge variant="secondary" className="ml-1">{halqaMosques.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="saathi" className="gap-2" data-testid="tab-saathi">
+              <Users className="w-4 h-4" />
+              সাথী
+              <Badge variant="secondary" className="ml-1">{halqaMembers.length}</Badge>
+            </TabsTrigger>
+          </TabsList>
 
-          {takajasLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ) : takajas.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <ClipboardList className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>এই হালকায় কোনো তাকাজা নেই</p>
+          <TabsContent value="takaja">
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5" />
+                  <h2 className="text-xl font-semibold">তাকাজা সমূহ</h2>
+                </div>
                 {isAdmin && (
-                  <Button 
-                    className="mt-4" 
-                    variant="outline" 
-                    onClick={() => setIsAddTakajaOpen(true)}
-                    data-testid="button-add-first-takaja"
-                  >
-                    প্রথম তাকাজা যোগ করুন
+                  <Button onClick={() => setIsAddTakajaOpen(true)} data-testid="button-add-takaja">
+                    <Plus className="w-4 h-4 mr-2" />
+                    নতুন তাকাজা
                   </Button>
                 )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {takajas.map((takaja) => {
-                const StatusIcon = statusLabels[takaja.status]?.icon || Clock;
-                const priority = priorityLabels[takaja.priority] || priorityLabels.normal;
-                
-                return (
-                  <Card 
-                    key={takaja.id} 
-                    className={takaja.status === "completed" ? "opacity-75" : ""}
-                    data-testid={`takaja-card-${takaja.id}`}
-                  >
-                    <CardContent className="py-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <h3 className="font-semibold" data-testid={`takaja-title-${takaja.id}`}>
-                              {takaja.title}
-                            </h3>
-                            <Badge className={priority.color} variant="secondary">
-                              {priority.label}
-                            </Badge>
-                            <Badge 
-                              variant={takaja.status === "completed" ? "default" : "outline"}
-                              className="gap-1"
-                            >
-                              <StatusIcon className="w-3 h-3" />
-                              {statusLabels[takaja.status]?.label || takaja.status}
-                            </Badge>
-                          </div>
-                          {takaja.description && (
-                            <p className="text-muted-foreground text-sm mb-2">
-                              {takaja.description}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                            <div className="flex items-center gap-1">
-                              <User className="w-4 h-4" />
-                              <span data-testid={`takaja-assignee-${takaja.id}`}>
-                                {getMemberName(takaja.assignedTo)}
-                              </span>
+              </div>
+
+              {takajasLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              ) : takajas.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    <ClipboardList className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>এই হালকায় কোনো তাকাজা নেই</p>
+                    {isAdmin && (
+                      <Button 
+                        className="mt-4" 
+                        variant="outline" 
+                        onClick={() => setIsAddTakajaOpen(true)}
+                        data-testid="button-add-first-takaja"
+                      >
+                        প্রথম তাকাজা যোগ করুন
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {takajas.map((takaja) => {
+                    const StatusIcon = statusLabels[takaja.status]?.icon || Clock;
+                    const priority = priorityLabels[takaja.priority] || priorityLabels.normal;
+                    
+                    return (
+                      <Card 
+                        key={takaja.id} 
+                        className={takaja.status === "completed" ? "opacity-75" : ""}
+                        data-testid={`takaja-card-${takaja.id}`}
+                      >
+                        <CardContent className="py-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <h3 className="font-semibold" data-testid={`takaja-title-${takaja.id}`}>
+                                  {takaja.title}
+                                </h3>
+                                <Badge className={priority.color} variant="secondary">
+                                  {priority.label}
+                                </Badge>
+                                <Badge 
+                                  variant={takaja.status === "completed" ? "default" : "outline"}
+                                  className="gap-1"
+                                >
+                                  <StatusIcon className="w-3 h-3" />
+                                  {statusLabels[takaja.status]?.label || takaja.status}
+                                </Badge>
+                              </div>
+                              {takaja.description && (
+                                <p className="text-muted-foreground text-sm mb-2">
+                                  {takaja.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                                <div className="flex items-center gap-1">
+                                  <User className="w-4 h-4" />
+                                  <span data-testid={`takaja-assignee-${takaja.id}`}>
+                                    {getMemberName(takaja.assignedTo)}
+                                  </span>
+                                </div>
+                                {takaja.dueDate && (
+                                  <div className="flex items-center gap-1">
+                                    <Calendar className="w-4 h-4" />
+                                    <span>
+                                      {new Date(takaja.dueDate).toLocaleDateString("bn-BD")}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            {takaja.dueDate && (
-                              <div className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                <span>
-                                  {new Date(takaja.dueDate).toLocaleDateString("bn-BD")}
-                                </span>
+                            {isAdmin && (
+                              <div className="flex items-center gap-2">
+                                {takaja.status !== "completed" && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSelectedTakaja(takaja);
+                                        setAssignDialogOpen(true);
+                                      }}
+                                      data-testid={`button-assign-${takaja.id}`}
+                                    >
+                                      এসাইন করুন
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => completeTakajaMutation.mutate(takaja.id)}
+                                      disabled={completeTakajaMutation.isPending}
+                                      data-testid={`button-complete-${takaja.id}`}
+                                    >
+                                      <CheckCircle className="w-4 h-4" />
+                                    </Button>
+                                  </>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => deleteTakajaMutation.mutate(takaja.id)}
+                                  disabled={deleteTakajaMutation.isPending}
+                                  data-testid={`button-delete-${takaja.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
                               </div>
                             )}
                           </div>
-                        </div>
-                        {isAdmin && (
-                          <div className="flex items-center gap-2">
-                            {takaja.status !== "completed" && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelectedTakaja(takaja);
-                                    setAssignDialogOpen(true);
-                                  }}
-                                  data-testid={`button-assign-${takaja.id}`}
-                                >
-                                  এসাইন করুন
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => completeTakajaMutation.mutate(takaja.id)}
-                                  disabled={completeTakajaMutation.isPending}
-                                  data-testid={`button-complete-${takaja.id}`}
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => deleteTakajaMutation.mutate(takaja.id)}
-                              disabled={deleteTakajaMutation.isPending}
-                              data-testid={`button-delete-${takaja.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </TabsContent>
 
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              <h2 className="text-xl font-semibold">সাথী সমূহ</h2>
-              <Badge variant="secondary">{halqaMembers.length} জন</Badge>
-            </div>
-            {isAdmin && (
-              <Button onClick={() => setIsAddMemberOpen(true)} data-testid="button-add-member-to-halqa">
-                <UserPlus className="w-4 h-4 mr-2" />
-                সাথী যোগ করুন
-              </Button>
-            )}
-          </div>
-
-          {membersLoading ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Skeleton className="h-40" />
-              <Skeleton className="h-40" />
-              <Skeleton className="h-40" />
-            </div>
-          ) : halqaMembers.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>এই হালকায় কোনো সাথী নেই</p>
+          <TabsContent value="mosques">
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  <h2 className="text-xl font-semibold">মসজিদ সমূহ</h2>
+                </div>
                 {isAdmin && (
-                  <Button 
-                    className="mt-4" 
-                    variant="outline" 
-                    onClick={() => setIsAddMemberOpen(true)}
-                    data-testid="button-add-first-member"
-                  >
-                    প্রথম সাথী যোগ করুন
+                  <Button onClick={() => setIsAddMosqueOpen(true)} data-testid="button-add-mosque-to-halqa">
+                    <Plus className="w-4 h-4 mr-2" />
+                    মসজিদ যোগ করুন
                   </Button>
                 )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {halqaMembers.map((member) => {
-                const initials = member.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
-                const mosqueName = getMosqueName(member.mosqueId);
-                
-                return (
-                  <Card 
-                    key={member.id} 
-                    className="hover-elevate transition-all"
-                    data-testid={`sathi-card-${member.id}`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-4 flex-1">
-                          <Avatar className="w-12 h-12">
-                            <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                              {initials}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-lg truncate" data-testid={`sathi-name-${member.id}`}>
-                              {member.name}
-                            </h3>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              <Badge variant="secondary" className="text-xs">
-                                {thanaName}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {unionName}
-                              </Badge>
+              </div>
+
+              {mosquesLoading ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <Skeleton className="h-40" />
+                  <Skeleton className="h-40" />
+                  <Skeleton className="h-40" />
+                </div>
+              ) : halqaMosques.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    <Building2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>এই হালকায় কোনো মসজিদ নেই</p>
+                    {isAdmin && (
+                      <Button 
+                        className="mt-4" 
+                        variant="outline" 
+                        onClick={() => setIsAddMosqueOpen(true)}
+                        data-testid="button-add-first-mosque"
+                      >
+                        প্রথম মসজিদ যোগ করুন
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {halqaMosques.map((mosque) => (
+                    <Card 
+                      key={mosque.id} 
+                      className="hover-elevate transition-all"
+                      data-testid={`mosque-card-${mosque.id}`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-4 flex-1">
+                            <div className="p-2 rounded-lg bg-primary/10">
+                              <Building2 className="w-6 h-6 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-lg truncate" data-testid={`mosque-name-${mosque.id}`}>
+                                {mosque.name}
+                              </h3>
+                              <p className="text-sm text-muted-foreground truncate mt-1">
+                                {mosque.address}
+                              </p>
                             </div>
                           </div>
+                          {isAdmin && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                if (confirm("আপনি কি নিশ্চিত যে এই মসজিদকে হালকা থেকে সরাতে চান?")) {
+                                  removeMosqueFromHalqaMutation.mutate(mosque.id);
+                                }
+                              }}
+                              data-testid={`button-remove-mosque-${mosque.id}`}
+                            >
+                              <Trash2 className="w-4 h-4 text-muted-foreground" />
+                            </Button>
+                          )}
                         </div>
-                        {isAdmin && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              if (confirm("আপনি কি নিশ্চিত যে এই সাথীকে হালকা থেকে সরাতে চান?")) {
-                                removeMemberFromHalqaMutation.mutate(member.id);
-                              }
-                            }}
-                            data-testid={`button-remove-member-${member.id}`}
-                          >
-                            <Trash2 className="w-4 h-4 text-muted-foreground" />
-                          </Button>
-                        )}
-                      </div>
-                      
-                      <div className="mt-4 space-y-2">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Phone className="w-4 h-4 flex-shrink-0" />
-                          <span data-testid={`sathi-phone-${member.id}`}>{member.phone}</span>
+                        
+                        <div className="mt-4 space-y-2">
+                          {mosque.imamPhone && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Phone className="w-4 h-4 flex-shrink-0" />
+                              <span>ইমাম: {mosque.imamPhone}</span>
+                            </div>
+                          )}
+                          {mosque.muazzinPhone && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Phone className="w-4 h-4 flex-shrink-0" />
+                              <span>মুয়াজ্জিন: {mosque.muazzinPhone}</span>
+                            </div>
+                          )}
                         </div>
-                        {mosqueName && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Building2 className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate" data-testid={`sathi-mosque-${member.id}`}>{mosqueName}</span>
-                          </div>
-                        )}
-                      </div>
 
-                      {member.tabligActivities && member.tabligActivities.length > 0 && (
                         <div className="mt-3 pt-3 border-t">
-                          <p className="text-xs font-medium text-muted-foreground mb-2">তাবলীগ কার্যক্রম:</p>
-                          <div className="flex flex-wrap gap-1">
-                            {member.tabligActivities.slice(0, 3).map((activity) => (
-                              <Badge key={activity} variant="outline" className="text-xs">
-                                {activity === "tin-chilla" && "৩ চিল্লা"}
-                                {activity === "ek-chilla" && "১ চিল্লা"}
-                                {activity === "bidesh-sofor" && "বিদেশ সফর"}
-                                {activity === "tin-din" && "৩ দিন"}
-                                {activity === "sat-din" && "৭ দিন"}
-                                {activity === "dos-din" && "১০ দিন"}
-                              </Badge>
-                            ))}
-                            {member.tabligActivities.length > 3 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{member.tabligActivities.length - 3}
-                              </Badge>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full"
+                            onClick={() => setLocation(`/mosque/${mosque.id}`)}
+                            data-testid={`button-view-mosque-${mosque.id}`}
+                          >
+                            বিস্তারিত দেখুন
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="saathi">
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  <h2 className="text-xl font-semibold">সাথী সমূহ</h2>
+                </div>
+                {isAdmin && (
+                  <Button onClick={() => setIsAddMemberOpen(true)} data-testid="button-add-member-to-halqa">
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    সাথী যোগ করুন
+                  </Button>
+                )}
+              </div>
+
+              {membersLoading ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <Skeleton className="h-40" />
+                  <Skeleton className="h-40" />
+                  <Skeleton className="h-40" />
+                </div>
+              ) : halqaMembers.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>এই হালকায় কোনো সাথী নেই</p>
+                    {isAdmin && (
+                      <Button 
+                        className="mt-4" 
+                        variant="outline" 
+                        onClick={() => setIsAddMemberOpen(true)}
+                        data-testid="button-add-first-member"
+                      >
+                        প্রথম সাথী যোগ করুন
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {halqaMembers.map((member) => {
+                    const initials = member.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
+                    const memberMosque = allMosques.find(m => m.id === member.mosqueId);
+                    
+                    return (
+                      <Card 
+                        key={member.id} 
+                        className="hover-elevate transition-all"
+                        data-testid={`sathi-card-${member.id}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-4 flex-1">
+                              <Avatar className="w-12 h-12">
+                                <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+                                  {initials}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-lg truncate" data-testid={`sathi-name-${member.id}`}>
+                                  {member.name}
+                                </h3>
+                                <div className="flex flex-wrap gap-1.5 mt-1">
+                                  <Badge variant="secondary" className="text-xs">
+                                    {thanaName}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {unionName}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </div>
+                            {isAdmin && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (confirm("আপনি কি নিশ্চিত যে এই সাথীকে হালকা থেকে সরাতে চান?")) {
+                                    removeMemberFromHalqaMutation.mutate(member.id);
+                                  }
+                                }}
+                                data-testid={`button-remove-member-${member.id}`}
+                              >
+                                <Trash2 className="w-4 h-4 text-muted-foreground" />
+                              </Button>
                             )}
                           </div>
-                        </div>
-                      )}
+                          
+                          <div className="mt-4 space-y-2">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Phone className="w-4 h-4 flex-shrink-0" />
+                              <span data-testid={`sathi-phone-${member.id}`}>{member.phone}</span>
+                            </div>
+                            {memberMosque && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Building2 className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate" data-testid={`sathi-mosque-${member.id}`}>{memberMosque.name}</span>
+                              </div>
+                            )}
+                          </div>
 
-                      <div className="mt-3 pt-3 border-t">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full"
-                          onClick={() => setLocation(`/member/${member.id}`)}
-                          data-testid={`button-view-member-${member.id}`}
-                        >
-                          বিস্তারিত দেখুন
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                          {member.tabligActivities && member.tabligActivities.length > 0 && (
+                            <div className="mt-3 pt-3 border-t">
+                              <p className="text-xs font-medium text-muted-foreground mb-2">তাবলীগ কার্যক্রম:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {member.tabligActivities.slice(0, 3).map((activity) => (
+                                  <Badge key={activity} variant="outline" className="text-xs">
+                                    {activity === "tin-chilla" && "৩ চিল্লা"}
+                                    {activity === "ek-chilla" && "১ চিল্লা"}
+                                    {activity === "bidesh-sofor" && "বিদেশ সফর"}
+                                    {activity === "tin-din" && "৩ দিন"}
+                                    {activity === "sat-din" && "৭ দিন"}
+                                    {activity === "dos-din" && "১০ দিন"}
+                                  </Badge>
+                                ))}
+                                {member.tabligActivities.length > 3 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{member.tabligActivities.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="mt-3 pt-3 border-t">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="w-full"
+                              onClick={() => setLocation(`/member/${member.id}`)}
+                              data-testid={`button-view-member-${member.id}`}
+                            >
+                              বিস্তারিত দেখুন
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog open={isAddTakajaOpen} onOpenChange={setIsAddTakajaOpen}>
@@ -921,6 +1112,48 @@ export default function HalqaDetailsPage() {
                       <p className="text-xs text-muted-foreground">{member.phone}</p>
                     </div>
                     <UserPlus className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddMosqueOpen} onOpenChange={setIsAddMosqueOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>হালকায় মসজিদ যোগ করুন</DialogTitle>
+            <DialogDescription>এই হালকায় মসজিদ যোগ করতে নিচের তালিকা থেকে নির্বাচন করুন</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {availableMosques.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Building2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>কোনো মসজিদ পাওয়া যায়নি</p>
+                <p className="text-sm mt-2">এই ইউনিয়নের সব মসজিদ ইতিমধ্যে কোনো হালকায় যুক্ত আছে</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {availableMosques.map((mosque) => (
+                  <Button
+                    key={mosque.id}
+                    variant="outline"
+                    className="w-full justify-start gap-3"
+                    onClick={() => {
+                      addMosqueToHalqaMutation.mutate(mosque.id);
+                    }}
+                    disabled={addMosqueToHalqaMutation.isPending}
+                    data-testid={`button-add-mosque-${mosque.id}`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Building2 className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-medium">{mosque.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{mosque.address}</p>
+                    </div>
+                    <Plus className="w-4 h-4 text-muted-foreground" />
                   </Button>
                 ))}
               </div>
