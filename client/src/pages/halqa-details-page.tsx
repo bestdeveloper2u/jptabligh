@@ -13,7 +13,9 @@ import {
   Clock,
   AlertCircle,
   Trash2,
-  Edit
+  Edit,
+  Phone,
+  Building2
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,13 +32,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Halqa, User as UserType, Takaja, Thana, Union } from "@shared/schema";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import type { Halqa, User as UserType, Takaja, Thana, Union, Mosque } from "@shared/schema";
 
 const takajaFormSchema = z.object({
   title: z.string().min(1, "শিরোনাম আবশ্যক"),
   description: z.string().optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
   dueDate: z.string().optional(),
+  assignedTo: z.string().optional(),
 });
 
 const priorityLabels: Record<string, { label: string; color: string }> = {
@@ -68,6 +72,7 @@ export default function HalqaDetailsPage() {
       description: "",
       priority: "normal",
       dueDate: "",
+      assignedTo: "",
     },
   });
 
@@ -104,12 +109,22 @@ export default function HalqaDetailsPage() {
     enabled: !!id,
   });
 
+  const { data: mosquesData } = useQuery<{ mosques: Mosque[] }>({
+    queryKey: ["/api/mosques"],
+  });
+
   const halqaMembers = membersData?.members || [];
+  const mosques = mosquesData?.mosques || [];
 
   const halqa = halqaData?.halqa;
   const takajas = takajasData?.takajas || [];
   const thanas = thanasData?.thanas || [];
   const unions = unionsData?.unions || [];
+
+  const getMosqueName = (mosqueId: string | null | undefined) => {
+    if (!mosqueId) return null;
+    return mosques.find(m => m.id === mosqueId)?.name;
+  };
 
   const thanaName = thanas.find(t => t.id === halqa?.thanaId)?.nameBn || "";
   const unionName = unions.find(u => u.id === halqa?.unionId)?.nameBn || "";
@@ -120,6 +135,8 @@ export default function HalqaDetailsPage() {
         ...data,
         halqaId: id,
         dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+        assignedTo: data.assignedTo || null,
+        status: data.assignedTo ? "in_progress" : "pending",
       });
     },
     onSuccess: () => {
@@ -249,33 +266,6 @@ export default function HalqaDetailsPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-3 gap-4">
-              {halqaMembers.slice(0, 6).map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
-                  data-testid={`member-item-${member.id}`}
-                >
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <User className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{member.name}</p>
-                    <p className="text-sm text-muted-foreground">{member.phone}</p>
-                  </div>
-                </div>
-              ))}
-              {halqaMembers.length > 6 && (
-                <div className="flex items-center justify-center p-3 rounded-lg bg-muted/50 text-muted-foreground">
-                  +{halqaMembers.length - 6} জন আরো
-                </div>
-              )}
-              {halqaMembers.length === 0 && (
-                <p className="text-muted-foreground col-span-3">এই হালকায় কোনো সাথী নেই</p>
-              )}
-            </div>
-          </CardContent>
         </Card>
 
         <div className="mb-6">
@@ -411,6 +401,105 @@ export default function HalqaDetailsPage() {
             </div>
           )}
         </div>
+
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              <h2 className="text-xl font-semibold">সাথী সমূহ</h2>
+              <Badge variant="secondary">{halqaMembers.length} জন</Badge>
+            </div>
+          </div>
+
+          {membersLoading ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Skeleton className="h-40" />
+              <Skeleton className="h-40" />
+              <Skeleton className="h-40" />
+            </div>
+          ) : halqaMembers.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>এই হালকায় কোনো সাথী নেই</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {halqaMembers.map((member) => {
+                const initials = member.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
+                const mosqueName = getMosqueName(member.mosqueId);
+                
+                return (
+                  <Card 
+                    key={member.id} 
+                    className="hover-elevate transition-all"
+                    data-testid={`sathi-card-${member.id}`}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <Avatar className="w-12 h-12">
+                          <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-lg truncate" data-testid={`sathi-name-${member.id}`}>
+                            {member.name}
+                          </h3>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            <Badge variant="secondary" className="text-xs">
+                              {thanaName}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {unionName}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 space-y-2">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Phone className="w-4 h-4 flex-shrink-0" />
+                          <span data-testid={`sathi-phone-${member.id}`}>{member.phone}</span>
+                        </div>
+                        {mosqueName && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Building2 className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate" data-testid={`sathi-mosque-${member.id}`}>{mosqueName}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {member.tabligActivities && member.tabligActivities.length > 0 && (
+                        <div className="mt-3 pt-3 border-t">
+                          <p className="text-xs font-medium text-muted-foreground mb-2">তাবলীগ কার্যক্রম:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {member.tabligActivities.slice(0, 3).map((activity) => (
+                              <Badge key={activity} variant="outline" className="text-xs">
+                                {activity === "tin-chilla" && "৩ চিল্লা"}
+                                {activity === "ek-chilla" && "১ চিল্লা"}
+                                {activity === "bidesh-sofor" && "বিদেশ সফর"}
+                                {activity === "tin-din" && "৩ দিন"}
+                                {activity === "sat-din" && "৭ দিন"}
+                                {activity === "dos-din" && "১০ দিন"}
+                              </Badge>
+                            ))}
+                            {member.tabligActivities.length > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{member.tabligActivities.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       <Dialog open={isAddTakajaOpen} onOpenChange={setIsAddTakajaOpen}>
@@ -493,6 +582,35 @@ export default function HalqaDetailsPage() {
                         data-testid="input-takaja-dueDate"
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="assignedTo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>সাথী এসাইন করুন (ঐচ্ছিক)</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-takaja-assignee">
+                          <SelectValue placeholder="সাথী নির্বাচন করুন" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">কাউকে এসাইন করা হয়নি</SelectItem>
+                        {halqaMembers.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.name} - {member.phone}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

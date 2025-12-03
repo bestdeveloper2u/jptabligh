@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { Home, Building2, MapPin, Users, Settings, UserPlus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import TopNavigation from "./TopNavigation";
 import BottomNavigation from "./BottomNavigation";
 import { cn } from "@/lib/utils";
+import type { Takaja } from "@shared/schema";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
   userName: string;
+  userId: string;
   userRole: "super_admin" | "manager" | "member";
   activeView: string;
   onViewChange: (view: string) => void;
@@ -25,6 +28,7 @@ const sidebarItems = [
 export default function DashboardLayout({ 
   children, 
   userName, 
+  userId,
   userRole, 
   activeView, 
   onViewChange,
@@ -32,17 +36,38 @@ export default function DashboardLayout({
 }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  const { data: myTakajasData } = useQuery<{ takajas: Takaja[] }>({
+    queryKey: ["/api/takajas/my"],
+    enabled: userRole === "member",
+    refetchInterval: 30000,
+  });
+
+  const notifications = (myTakajasData?.takajas || []).map(takaja => ({
+    id: takaja.id,
+    title: takaja.title,
+    description: takaja.description,
+    priority: takaja.priority,
+    status: takaja.status,
+    createdAt: takaja.createdAt,
+  }));
+
   const filteredItems = sidebarItems.filter(
     item => !item.adminOnly || userRole === "super_admin"
   );
+
+  const handleNotificationClick = (takajaId: string) => {
+    onViewChange("dashboard");
+  };
 
   return (
     <div className="gradient-bg min-h-screen">
       <TopNavigation
         userName={userName}
         userRole={userRole}
+        notifications={notifications}
         onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
         onLogout={onLogout}
+        onNotificationClick={handleNotificationClick}
       />
 
       <div className="flex">

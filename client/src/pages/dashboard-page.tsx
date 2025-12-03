@@ -1627,6 +1627,7 @@ export default function DashboardPage() {
     <>
       <DashboardLayout
         userName={user?.name || ""}
+        userId={user?.id || ""}
         userRole={(user?.role as "member" | "super_admin" | "manager") || "member"}
         activeView={activeView}
         onViewChange={setActiveView}

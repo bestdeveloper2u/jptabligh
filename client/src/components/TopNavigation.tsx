@@ -1,4 +1,4 @@
-import { Bell, Menu, Moon, Sun, LogOut } from "lucide-react";
+import { Bell, Menu, Moon, Sun, LogOut, ClipboardList, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,12 +10,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState } from "react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+interface Notification {
+  id: string;
+  title: string;
+  description?: string | null;
+  priority: string;
+  status: string;
+  createdAt: string | Date;
+}
 
 interface TopNavigationProps {
   userName: string;
   userRole: "super_admin" | "manager" | "member";
+  notifications?: Notification[];
   onMenuClick?: () => void;
   onLogout?: () => void;
+  onNotificationClick?: (id: string) => void;
 }
 
 const roleLabels = {
@@ -30,14 +42,30 @@ const roleColors = {
   member: "bg-accent",
 };
 
-export default function TopNavigation({ userName, userRole, onMenuClick, onLogout }: TopNavigationProps) {
+const priorityLabels: Record<string, { label: string; color: string }> = {
+  low: { label: "কম", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
+  normal: { label: "সাধারণ", color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
+  high: { label: "বেশি", color: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" },
+  urgent: { label: "জরুরি", color: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" },
+};
+
+export default function TopNavigation({ 
+  userName, 
+  userRole, 
+  notifications = [], 
+  onMenuClick, 
+  onLogout,
+  onNotificationClick 
+}: TopNavigationProps) {
   const [isDark, setIsDark] = useState(false);
   const initials = userName.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
+  
+  const pendingNotifications = notifications.filter(n => n.status !== "completed");
+  const hasNotifications = pendingNotifications.length > 0;
 
   const toggleTheme = () => {
     setIsDark(!isDark);
     document.documentElement.classList.toggle("dark");
-    console.log("Theme toggled:", !isDark ? "dark" : "light");
   };
 
   return (
@@ -69,15 +97,95 @@ export default function TopNavigation({ userName, userRole, onMenuClick, onLogou
             {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative"
-            data-testid="button-notifications"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                data-testid="button-notifications"
+              >
+                <Bell className="w-5 h-5" />
+                {hasNotifications && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-destructive text-destructive-foreground text-xs font-medium rounded-full px-1">
+                    {pendingNotifications.length > 9 ? "9+" : pendingNotifications.length}
+                  </span>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+              <div className="px-3 py-2 border-b flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4" />
+                  <span className="font-medium">নোটিফিকেশন</span>
+                </div>
+                {hasNotifications && (
+                  <Badge variant="secondary">{pendingNotifications.length} টি নতুন</Badge>
+                )}
+              </div>
+              
+              {pendingNotifications.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <CheckCircle className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">কোনো নতুন নোটিফিকেশন নেই</p>
+                </div>
+              ) : (
+                <ScrollArea className="max-h-80">
+                  <div className="p-1">
+                    {pendingNotifications.map((notification) => {
+                      const priority = priorityLabels[notification.priority] || priorityLabels.normal;
+                      return (
+                        <div
+                          key={notification.id}
+                          className="p-3 rounded-md hover-elevate cursor-pointer transition-all mb-1"
+                          onClick={() => onNotificationClick?.(notification.id)}
+                          data-testid={`notification-${notification.id}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="p-2 rounded-lg bg-primary/10 text-primary flex-shrink-0">
+                              <ClipboardList className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <p className="font-medium text-sm truncate">{notification.title}</p>
+                                <Badge className={`${priority.color} text-xs`} variant="secondary">
+                                  {priority.label}
+                                </Badge>
+                              </div>
+                              {notification.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                  {notification.description}
+                                </p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {new Date(notification.createdAt).toLocaleDateString("bn-BD")}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              )}
+              
+              {pendingNotifications.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <div className="p-2">
+                    <Button 
+                      variant="ghost" 
+                      className="w-full text-sm"
+                      onClick={() => onNotificationClick?.("")}
+                      data-testid="button-view-all-notifications"
+                    >
+                      সব দেখুন
+                    </Button>
+                  </div>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

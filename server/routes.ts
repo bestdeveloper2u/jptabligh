@@ -84,6 +84,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: hashedPassword,
       });
 
+      // Update halqa members count if user is a member and has a halqaId
+      if (user.role === "member" && user.halqaId) {
+        await storage.updateHalqaMembersCount(user.halqaId);
+      }
+
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
 
@@ -355,9 +360,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "অনুমতি নেই" });
       }
 
+      // Get old member data to check halqaId change
+      const oldMember = await storage.getUser(targetId);
+      const oldHalqaId = oldMember?.halqaId;
+
       const member = await storage.updateUser(targetId, req.body);
       if (!member) {
         return res.status(404).json({ error: "সাথী পাওয়া যায়নি" });
+      }
+
+      // Update halqa members count if halqaId changed
+      if (member.role === "member") {
+        if (oldHalqaId && oldHalqaId !== member.halqaId) {
+          await storage.updateHalqaMembersCount(oldHalqaId);
+        }
+        if (member.halqaId && member.halqaId !== oldHalqaId) {
+          await storage.updateHalqaMembersCount(member.halqaId);
+        }
       }
 
       const { password, ...memberWithoutPassword } = member;
@@ -370,10 +389,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/members/:id", requireAuth, requireRole("super_admin"), async (req, res) => {
     try {
+      // Get member data before deletion to get halqaId
+      const member = await storage.getUser(req.params.id);
+      const halqaId = member?.halqaId;
+      const isMember = member?.role === "member";
+
       const deleted = await storage.deleteUser(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "সাথী পাওয়া যায়নি" });
       }
+
+      // Update halqa members count after deletion
+      if (isMember && halqaId) {
+        await storage.updateHalqaMembersCount(halqaId);
+      }
+
       res.json({ success: true });
     } catch (error) {
       console.error("Delete member error:", error);
@@ -798,6 +828,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Takaja (তাকাজা) Routes =====
+
+  // Get current user's assigned takajas (notifications)
+  app.get("/api/takajas/my", requireAuth, async (req, res) => {
+    try {
+      const currentUser = (req as any).user as User;
+      const takajasList = await storage.getTakajasByAssignee(currentUser.id);
+      res.json({ takajas: takajasList });
+    } catch (error) {
+      console.error("Get my takajas error:", error);
+      res.status(500).json({ error: "তাকাজা লোড করতে ব্যর্থ হয়েছে" });
+    }
+  });
 
   // Get all takajas (with role-based filtering)
   app.get("/api/takajas", requireAuth, async (req, res) => {

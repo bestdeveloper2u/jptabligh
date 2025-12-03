@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq, and, ilike, or } from "drizzle-orm";
+import { eq, and, ilike, or, count } from "drizzle-orm";
 import {
   users,
   thanas,
@@ -78,6 +78,7 @@ export interface IStorage {
   updateHalqa(id: string, halqa: Partial<InsertHalqa>): Promise<Halqa | undefined>;
   deleteHalqa(id: string): Promise<boolean>;
   getMembersByHalqa(halqaId: string): Promise<User[]>;
+  updateHalqaMembersCount(halqaId: string): Promise<void>;
 
   // Bulk import methods
   bulkCreateMosques(mosquesList: InsertMosque[]): Promise<Mosque[]>;
@@ -127,12 +128,46 @@ export class DbStorage implements IStorage {
   }
 
   async updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined> {
+    const existingUser = await this.getUser(id);
+    const oldHalqaId = existingUser?.halqaId;
+    const oldRole = existingUser?.role;
+    
     const result = await db.update(users).set(user).where(eq(users.id, id)).returning();
-    return result[0];
+    const updatedUser = result[0];
+    
+    if (updatedUser) {
+      const newHalqaId = user.halqaId !== undefined ? user.halqaId : oldHalqaId;
+      const newRole = user.role !== undefined ? user.role : oldRole;
+      
+      const halqaChanged = user.halqaId !== undefined && oldHalqaId !== user.halqaId;
+      const roleChanged = user.role !== undefined && oldRole !== user.role;
+      const memberRoleInvolved = oldRole === "member" || newRole === "member";
+      
+      if (halqaChanged) {
+        if (oldHalqaId) {
+          await this.updateHalqaMembersCount(oldHalqaId);
+        }
+        if (newHalqaId) {
+          await this.updateHalqaMembersCount(newHalqaId);
+        }
+      } else if (roleChanged && memberRoleInvolved && newHalqaId) {
+        await this.updateHalqaMembersCount(newHalqaId);
+      }
+    }
+    
+    return updatedUser;
   }
 
   async deleteUser(id: string): Promise<boolean> {
+    const existingUser = await this.getUser(id);
+    const halqaId = existingUser?.halqaId;
+    
     const result = await db.delete(users).where(eq(users.id, id)).returning();
+    
+    if (result.length > 0 && halqaId) {
+      await this.updateHalqaMembersCount(halqaId);
+    }
+    
     return result.length > 0;
   }
 
@@ -364,6 +399,18 @@ export class DbStorage implements IStorage {
   async deleteHalqa(id: string): Promise<boolean> {
     const result = await db.delete(halqas).where(eq(halqas.id, id)).returning();
     return result.length > 0;
+  }
+
+  async updateHalqaMembersCount(halqaId: string): Promise<void> {
+    const result = await db.select({ count: count() })
+      .from(users)
+      .where(and(eq(users.halqaId, halqaId), eq(users.role, "member")));
+    
+    const membersCount = result[0]?.count || 0;
+    
+    await db.update(halqas)
+      .set({ membersCount })
+      .where(eq(halqas.id, halqaId));
   }
 
   // Bulk import methods
