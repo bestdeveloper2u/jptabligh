@@ -17,6 +17,14 @@ A full-stack web application for managing Tabligh (Islamic missionary) activitie
 - Added member removal feature from halqa details page
 - Cascading filters: Thana → Union → Halqa selection filters appropriately
 
+### Halqa Details Page - 3 Tab Interface
+- Redesigned halqa details page with 3 organized tabs:
+  1. **তাকাজা (Takaja)**: Task management with create, assign, complete, and delete functionality
+  2. **মসজিদ (Mosques)**: View mosques in halqa, add new mosques, remove existing ones
+  3. **সাথী (Saathi)**: View members in halqa, add new members, remove existing ones
+- Each tab shows count badge in the tab header
+- Fixed takaja creation bug: date strings now properly transform to Date objects in schema
+
 ### Takaja (তাকাজা) Feature
 - Added Takaja management system for task/request assignments within halqas
 - Halqa details page accessible by clicking "বিস্তারিত" button on halqa cards
