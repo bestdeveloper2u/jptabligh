@@ -114,6 +114,12 @@ export const insertTakajaSchema = createInsertSchema(takajas).omit({
   id: true,
   createdAt: true,
   completedAt: true,
+}).extend({
+  dueDate: z.string().nullable().optional().transform((val) => {
+    if (!val) return null;
+    const date = new Date(val);
+    return isNaN(date.getTime()) ? null : date;
+  }),
 });
 
 // Types
