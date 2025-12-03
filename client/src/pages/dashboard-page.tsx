@@ -56,7 +56,7 @@ const memberFormSchema = z.object({
   thanaId: z.string().min(1, "থানা নির্বাচন করুন"),
   unionId: z.string().min(1, "ইউনিয়ন নির্বাচন করুন"),
   mosqueId: z.string().min(1, "মসজিদ নির্বাচন করুন"),
-  halqaId: z.string().min(1, "হালকা নির্বাচন করুন"),
+  halqaId: z.string().optional(),
   tabligActivities: z.array(z.string()).optional(),
 });
 
@@ -372,10 +372,7 @@ export default function DashboardPage() {
   // Create manager mutation
   const createManagerMutation = useMutation({
     mutationFn: async (data: z.infer<typeof managerFormSchema>) => {
-      const response = await apiRequest("POST", "/api/auth/register", {
-        ...data,
-        role: "manager",
-      });
+      const response = await apiRequest("POST", "/api/managers", data);
       return response;
     },
     onSuccess: () => {
@@ -492,6 +489,7 @@ export default function DashboardPage() {
 
   const canManage = user?.role === "super_admin" || user?.role === "manager";
   const isSuperAdmin = user?.role === "super_admin";
+  const isManager = user?.role === "manager";
 
   const handleDeleteMember = (id: string) => {
     if (confirm("আপনি কি নিশ্চিত যে এই সাথীকে মুছে ফেলতে চান?")) {
@@ -1519,6 +1517,141 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Data Import Section - Manager Only (for their thana) */}
+        {isManager && user?.thanaId && (
+          <div className="glass p-6 rounded-lg space-y-4">
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Upload className="w-5 h-5" />
+              ডেটা ইমপোর্ট
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              আপনার থানার ({getThanaName(user.thanaId)}) জন্য CSV ফাইল থেকে ডেটা আপলোড করুন। শুধুমাত্র আপনার থানার ডেটা ইমপোর্ট করতে পারবেন।
+            </p>
+            
+            <div className="grid md:grid-cols-3 gap-4">
+              {/* Import Members - Manager */}
+              <div className="p-4 border rounded-lg space-y-3">
+                <h4 className="font-medium">সাথী ইমপোর্ট</h4>
+                <p className="text-sm text-muted-foreground">
+                  CSV ফরম্যাট: নাম, মোবাইল, ইমেইল, থানা, ইউনিয়ন
+                </p>
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  id="manager-import-members"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportMembers(file);
+                    e.target.value = '';
+                  }}
+                  data-testid="input-manager-import-members"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => document.getElementById('manager-import-members')?.click()}
+                  data-testid="button-manager-import-members"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  সাথী আপলোড
+                </Button>
+              </div>
+
+              {/* Import Mosques - Manager */}
+              <div className="p-4 border rounded-lg space-y-3">
+                <h4 className="font-medium">মসজিদ ইমপোর্ট</h4>
+                <p className="text-sm text-muted-foreground">
+                  CSV ফরম্যাট: নাম, ঠিকানা, ইমামের ফোন, মুয়াজ্জিনের ফোন, থানা, ইউনিয়ন
+                </p>
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  id="manager-import-mosques"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportMosques(file);
+                    e.target.value = '';
+                  }}
+                  data-testid="input-manager-import-mosques"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => document.getElementById('manager-import-mosques')?.click()}
+                  data-testid="button-manager-import-mosques"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  মসজিদ আপলোড
+                </Button>
+              </div>
+
+              {/* Import Halqas - Manager */}
+              <div className="p-4 border rounded-lg space-y-3">
+                <h4 className="font-medium">হালকা ইমপোর্ট</h4>
+                <p className="text-sm text-muted-foreground">
+                  CSV ফরম্যাট: নাম, থানা, ইউনিয়ন
+                </p>
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  id="manager-import-halqas"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportHalqas(file);
+                    e.target.value = '';
+                  }}
+                  data-testid="input-manager-import-halqas"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => document.getElementById('manager-import-halqas')?.click()}
+                  data-testid="button-manager-import-halqas"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  হালকা আপলোড
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Data Export Section - Manager Only */}
+        {isManager && user?.thanaId && (
+          <div className="glass p-6 rounded-lg space-y-4">
+            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Download className="w-5 h-5" />
+              ডেটা এক্সপোর্ট
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              আপনার থানার ({getThanaName(user.thanaId)}) ডেটা CSV ফরম্যাটে ডাউনলোড করুন
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button 
+                variant="outline" 
+                onClick={handleExportMembers}
+                data-testid="button-manager-export-members"
+              >
+                সাথীদের তালিকা ডাউনলোড
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportMosques}
+                data-testid="button-manager-export-mosques"
+              >
+                মসজিদের তালিকা ডাউনলোড
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportHalqas}
+                data-testid="button-manager-export-halqas"
+              >
+                হালকার তালিকা ডাউনলোড
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Schedule Settings - Super Admin Only */}
         {isSuperAdmin && (
           <div className="glass p-6 rounded-lg space-y-4">
@@ -2061,10 +2194,10 @@ function AddMemberDialog({
                 name="halqaId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>হালকা *</FormLabel>
+                    <FormLabel>হালকা (ঐচ্ছিক)</FormLabel>
                     <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
+                      onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
+                      value={field.value || "none"}
                       disabled={!selectedUnion}
                     >
                       <FormControl>
@@ -2073,6 +2206,12 @@ function AddMemberDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="none">হালকা নেই / নির্বাচন করা হয়নি</SelectItem>
+                        {halqas.length === 0 && selectedUnion && (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                            এই ইউনিয়নে কোন হালকা নেই
+                          </div>
+                        )}
                         {halqas.map((halqa) => (
                           <SelectItem key={halqa.id} value={halqa.id}>
                             {halqa.name}
@@ -2304,8 +2443,8 @@ function AddMosqueDialog({
                 <FormItem>
                   <FormLabel>হালকা (ঐচ্ছিক)</FormLabel>
                   <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value}
+                    onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
+                    value={field.value || "none"}
                     disabled={!selectedUnion}
                   >
                     <FormControl>
@@ -2314,6 +2453,12 @@ function AddMosqueDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="none">হালকা নেই / নির্বাচন করা হয়নি</SelectItem>
+                      {halqas.length === 0 && selectedUnion && (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          এই ইউনিয়নে কোন হালকা নেই
+                        </div>
+                      )}
                       {halqas.map((halqa) => (
                         <SelectItem key={halqa.id} value={halqa.id}>
                           {halqa.name}

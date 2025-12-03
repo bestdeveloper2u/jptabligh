@@ -69,6 +69,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertUserSchema.parse(req.body);
       
+      // Check if this is an authenticated request (manager adding a member)
+      let authenticatedUser: User | undefined;
+      if (req.session.userId) {
+        authenticatedUser = await storage.getUser(req.session.userId);
+      }
+      
+      // If authenticated as manager, force thana to manager's thana
+      let effectiveThanaId = validatedData.thanaId;
+      if (authenticatedUser?.role === "manager") {
+        if (!authenticatedUser.thanaId) {
+          return res.status(403).json({ error: "ম্যানেজারের থানা নির্ধারিত নেই" });
+        }
+        // Force thanaId to manager's thana (ignore any supplied thanaId)
+        effectiveThanaId = authenticatedUser.thanaId;
+      }
+      
       // Check if user already exists
       const existingUser = await storage.getUserByPhone(validatedData.phone);
       if (existingUser) {
@@ -78,10 +94,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const hashedPassword = await bcrypt.hash(validatedData.password, 10);
 
-      // Create user
+      // Create user - force role to "member" and use effective thanaId for registration
       const user = await storage.createUser({
         ...validatedData,
         password: hashedPassword,
+        role: "member", // Always set role to member for registration
+        thanaId: effectiveThanaId, // Use effective thanaId (forced for managers)
       });
 
       // Update halqa members count if user is a member and has a halqaId
@@ -92,8 +110,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
 
-      // Create session
-      req.session.userId = user.id;
+      // Only create session for unauthenticated (self-registration)
+      if (!authenticatedUser) {
+        req.session.userId = user.id;
+      }
 
       res.json({ user: userWithoutPassword });
     } catch (error: any) {
@@ -155,12 +175,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ user: userWithoutPassword });
   });
 
+  // Helper function to get manager's thanaId restriction
+  function getManagerThanaRestriction(user: User): string | null {
+    if (user.role === "manager" && user.thanaId) {
+      return user.thanaId;
+    }
+    return null;
+  }
+
   // ===== Thana Routes =====
   
-  app.get("/api/thanas", async (req, res) => {
+  app.get("/api/thanas", requireAuth, async (req, res) => {
     try {
-      const thanas = await storage.getAllThanas();
-      res.json({ thanas });
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
+      if (managerThanaId) {
+        const thana = await storage.getThana(managerThanaId);
+        res.json({ thanas: thana ? [thana] : [] });
+      } else {
+        const thanas = await storage.getAllThanas();
+        res.json({ thanas });
+      }
     } catch (error) {
       console.error("Get thanas error:", error);
       res.status(500).json({ error: "থানা তালিকা লোড করতে ব্যর্থ হয়েছে" });
@@ -169,12 +205,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Union Routes =====
   
-  app.get("/api/unions", async (req, res) => {
+  app.get("/api/unions", requireAuth, async (req, res) => {
     try {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
       const { thanaId } = req.query;
       
-      const unions = thanaId && thanaId !== "all"
-        ? await storage.getUnionsByThana(thanaId as string)
+      const effectiveThanaId = managerThanaId || (thanaId && thanaId !== "all" ? thanaId as string : null);
+      
+      const unions = effectiveThanaId
+        ? await storage.getUnionsByThana(effectiveThanaId)
         : await storage.getAllUnions();
         
       res.json({ unions });
@@ -186,15 +226,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Mosque Routes =====
   
-  app.get("/api/mosques", async (req, res) => {
+  app.get("/api/mosques", requireAuth, async (req, res) => {
     try {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
       const { search, thanaId, unionId, halqaId } = req.query;
 
+      const effectiveThanaId = managerThanaId || (thanaId && thanaId !== "all" ? thanaId as string : undefined);
+
       let mosques;
-      if (search || (thanaId && thanaId !== "all") || (unionId && unionId !== "all") || (halqaId && halqaId !== "all")) {
+      if (search || effectiveThanaId || (unionId && unionId !== "all") || (halqaId && halqaId !== "all")) {
         mosques = await storage.filterMosques(
           search as string,
-          thanaId as string,
+          effectiveThanaId,
           unionId as string,
           halqaId as string
         );
@@ -211,7 +255,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/mosques", requireAuth, requireRole("super_admin", "manager"), async (req, res) => {
     try {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
       const validatedData = insertMosqueSchema.parse(req.body);
+      
+      // Manager restriction: only allow creating mosques in their thana
+      if (managerThanaId && validatedData.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "শুধুমাত্র আপনার থানার মসজিদ যোগ করতে পারবেন" });
+      }
+      
       const mosque = await storage.createMosque(validatedData);
       res.json({ mosque });
     } catch (error: any) {
@@ -226,10 +279,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/mosques/:id", requireAuth, requireRole("super_admin", "manager"), async (req, res) => {
     try {
-      const mosque = await storage.updateMosque(req.params.id, req.body);
-      if (!mosque) {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
+      // First get the existing mosque to check thana
+      const existingMosque = await storage.getMosque(req.params.id);
+      if (!existingMosque) {
         return res.status(404).json({ error: "মসজিদ পাওয়া যায়নি" });
       }
+      
+      // Manager restriction: only allow updating mosques in their thana
+      if (managerThanaId && existingMosque.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "শুধুমাত্র আপনার থানার মসজিদ আপডেট করতে পারবেন" });
+      }
+      
+      // Also check if trying to move to a different thana
+      if (managerThanaId && req.body.thanaId && req.body.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "মসজিদ অন্য থানায় স্থানান্তর করতে পারবেন না" });
+      }
+      
+      const mosque = await storage.updateMosque(req.params.id, req.body);
       res.json({ mosque });
     } catch (error) {
       console.error("Update mosque error:", error);
@@ -239,10 +308,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/mosques/:id", requireAuth, requireRole("super_admin", "manager"), async (req, res) => {
     try {
-      const deleted = await storage.deleteMosque(req.params.id);
-      if (!deleted) {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
+      // First get the existing mosque to check thana
+      const existingMosque = await storage.getMosque(req.params.id);
+      if (!existingMosque) {
         return res.status(404).json({ error: "মসজিদ পাওয়া যায়নি" });
       }
+      
+      // Manager restriction: only allow deleting mosques in their thana
+      if (managerThanaId && existingMosque.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "শুধুমাত্র আপনার থানার মসজিদ মুছে ফেলতে পারবেন" });
+      }
+      
+      const deleted = await storage.deleteMosque(req.params.id);
       res.json({ success: true });
     } catch (error) {
       console.error("Delete mosque error:", error);
@@ -252,15 +332,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Halqa Routes =====
   
-  app.get("/api/halqas", async (req, res) => {
+  app.get("/api/halqas", requireAuth, async (req, res) => {
     try {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
       const { search, thanaId, unionId } = req.query;
 
+      const effectiveThanaId = managerThanaId || (thanaId && thanaId !== "all" ? thanaId as string : undefined);
+
       let halqas;
-      if (search || (thanaId && thanaId !== "all") || (unionId && unionId !== "all")) {
+      if (search || effectiveThanaId || (unionId && unionId !== "all")) {
         halqas = await storage.filterHalqas(
           search as string,
-          thanaId as string,
+          effectiveThanaId,
           unionId as string
         );
       } else {
@@ -276,7 +360,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/halqas", requireAuth, requireRole("super_admin", "manager"), async (req, res) => {
     try {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
       const validatedData = insertHalqaSchema.parse(req.body);
+      
+      // Manager restriction: only allow creating halqas in their thana
+      if (managerThanaId && validatedData.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "শুধুমাত্র আপনার থানার হালকা যোগ করতে পারবেন" });
+      }
+      
       const halqa = await storage.createHalqa(validatedData);
       res.json({ halqa });
     } catch (error: any) {
@@ -291,10 +384,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/halqas/:id", requireAuth, requireRole("super_admin", "manager"), async (req, res) => {
     try {
-      const halqa = await storage.updateHalqa(req.params.id, req.body);
-      if (!halqa) {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
+      // First get the existing halqa to check thana
+      const existingHalqa = await storage.getHalqa(req.params.id);
+      if (!existingHalqa) {
         return res.status(404).json({ error: "হালকা পাওয়া যায়নি" });
       }
+      
+      // Manager restriction: only allow updating halqas in their thana
+      if (managerThanaId && existingHalqa.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "শুধুমাত্র আপনার থানার হালকা আপডেট করতে পারবেন" });
+      }
+      
+      // Also check if trying to move to a different thana
+      if (managerThanaId && req.body.thanaId && req.body.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "হালকা অন্য থানায় স্থানান্তর করতে পারবেন না" });
+      }
+      
+      const halqa = await storage.updateHalqa(req.params.id, req.body);
       res.json({ halqa });
     } catch (error) {
       console.error("Update halqa error:", error);
@@ -304,10 +413,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/halqas/:id", requireAuth, requireRole("super_admin", "manager"), async (req, res) => {
     try {
-      const deleted = await storage.deleteHalqa(req.params.id);
-      if (!deleted) {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
+      // First get the existing halqa to check thana
+      const existingHalqa = await storage.getHalqa(req.params.id);
+      if (!existingHalqa) {
         return res.status(404).json({ error: "হালকা পাওয়া যায়নি" });
       }
+      
+      // Manager restriction: only allow deleting halqas in their thana
+      if (managerThanaId && existingHalqa.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "শুধুমাত্র আপনার থানার হালকা মুছে ফেলতে পারবেন" });
+      }
+      
+      const deleted = await storage.deleteHalqa(req.params.id);
       res.json({ success: true });
     } catch (error) {
       console.error("Delete halqa error:", error);
@@ -320,6 +440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/members", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
       const { search, thanaId, unionId, role, halqaId, mosqueId } = req.query;
 
       // Determine target role - default to "member" if not provided or empty
@@ -330,10 +451,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "আপনার এই অপারেশন করার অনুমতি নেই" });
       }
       
+      // Apply manager thana restriction
+      const effectiveThanaId = managerThanaId || (thanaId && thanaId !== "all" ? thanaId as string : undefined);
+      
       // Always use searchUsers which handles all filtering including role
       const members = await storage.searchUsers(
         (search as string) || "",
-        thanaId as string,
+        effectiveThanaId,
         unionId as string,
         roleString,
         halqaId as string,
@@ -354,15 +478,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as any).user as User;
       const targetId = req.params.id;
+      const managerThanaId = getManagerThanaRestriction(user);
 
       // Users can only update their own profile unless they're admin/manager
       if (user.id !== targetId && !["super_admin", "manager"].includes(user.role)) {
         return res.status(403).json({ error: "অনুমতি নেই" });
       }
 
-      // Get old member data to check halqaId change
+      // Get old member data to check halqaId change and thana restriction
       const oldMember = await storage.getUser(targetId);
-      const oldHalqaId = oldMember?.halqaId;
+      if (!oldMember) {
+        return res.status(404).json({ error: "সাথী পাওয়া যায়নি" });
+      }
+      
+      const oldHalqaId = oldMember.halqaId;
+      
+      // Manager restriction: only allow updating members in their thana
+      if (managerThanaId && user.id !== targetId && oldMember.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "শুধুমাত্র আপনার থানার সাথী আপডেট করতে পারবেন" });
+      }
+      
+      // Also check if trying to move to a different thana
+      if (managerThanaId && req.body.thanaId && req.body.thanaId !== managerThanaId) {
+        return res.status(403).json({ error: "সাথী অন্য থানায় স্থানান্তর করতে পারবেন না" });
+      }
 
       const member = await storage.updateUser(targetId, req.body);
       if (!member) {
@@ -498,8 +637,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Import members from CSV
-  app.post("/api/import/members", requireAuth, requireRole("super_admin"), async (req, res) => {
+  app.post("/api/import/members", requireAuth, requireRole("super_admin", "manager"), async (req, res) => {
     try {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
       const { members } = req.body;
       if (!Array.isArray(members) || members.length === 0) {
         return res.status(400).json({ error: "কোন ডেটা পাওয়া যায়নি" });
@@ -531,6 +673,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!thana) {
             results.failed++;
             results.errors.push(`সারি ${rowNum}: থানা পাওয়া যায়নি - ${validatedMember.thana}`);
+            continue;
+          }
+
+          // Manager restriction: only allow importing to their own thana
+          if (managerThanaId && thana.id !== managerThanaId) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: শুধুমাত্র আপনার থানার ডেটা ইমপোর্ট করতে পারবেন`);
             continue;
           }
 
@@ -583,8 +732,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Import mosques from CSV
-  app.post("/api/import/mosques", requireAuth, requireRole("super_admin"), async (req, res) => {
+  app.post("/api/import/mosques", requireAuth, requireRole("super_admin", "manager"), async (req, res) => {
     try {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
       const { mosques: mosquesList } = req.body;
       if (!Array.isArray(mosquesList) || mosquesList.length === 0) {
         return res.status(400).json({ error: "কোন ডেটা পাওয়া যায়নি" });
@@ -616,6 +768,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!thana) {
             results.failed++;
             results.errors.push(`সারি ${rowNum}: থানা পাওয়া যায়নি - ${validatedMosque.thana}`);
+            continue;
+          }
+
+          // Manager restriction: only allow importing to their own thana
+          if (managerThanaId && thana.id !== managerThanaId) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: শুধুমাত্র আপনার থানার ডেটা ইমপোর্ট করতে পারবেন`);
             continue;
           }
 
@@ -655,8 +814,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Import halqas from CSV
-  app.post("/api/import/halqas", requireAuth, requireRole("super_admin"), async (req, res) => {
+  app.post("/api/import/halqas", requireAuth, requireRole("super_admin", "manager"), async (req, res) => {
     try {
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+      
       const { halqas: halqasList } = req.body;
       if (!Array.isArray(halqasList) || halqasList.length === 0) {
         return res.status(400).json({ error: "কোন ডেটা পাওয়া যায়নি" });
@@ -688,6 +850,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!thana) {
             results.failed++;
             results.errors.push(`সারি ${rowNum}: থানা পাওয়া যায়নি - ${validatedHalqa.thana}`);
+            continue;
+          }
+
+          // Manager restriction: only allow importing to their own thana
+          if (managerThanaId && thana.id !== managerThanaId) {
+            results.failed++;
+            results.errors.push(`সারি ${rowNum}: শুধুমাত্র আপনার থানার ডেটা ইমপোর্ট করতে পারবেন`);
             continue;
           }
 
@@ -727,11 +896,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/api/stats", requireAuth, async (req, res) => {
     try {
-      const [members, mosques, halqas] = await Promise.all([
-        storage.getUsersByRole("member"),
-        storage.getAllMosques(),
-        storage.getAllHalqas(),
-      ]);
+      const user = (req as any).user as User;
+      const managerThanaId = getManagerThanaRestriction(user);
+
+      let members, mosques, halqas;
+      
+      if (managerThanaId) {
+        [members, mosques, halqas] = await Promise.all([
+          storage.searchUsers("", managerThanaId, undefined, "member", undefined, undefined),
+          storage.filterMosques(undefined, managerThanaId, undefined, undefined),
+          storage.filterHalqas(undefined, managerThanaId, undefined),
+        ]);
+      } else {
+        [members, mosques, halqas] = await Promise.all([
+          storage.getUsersByRole("member"),
+          storage.getAllMosques(),
+          storage.getAllHalqas(),
+        ]);
+      }
 
       const stats = {
         totalMembers: members.length,
