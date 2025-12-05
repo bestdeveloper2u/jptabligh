@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Phone, MapPin, Building2, Users, Calendar, Edit, CheckCircle2, XCircle, Clock, BookOpen, Heart, Footprints, CalendarDays, UserPlus } from "lucide-react";
+import { ArrowLeft, Phone, MapPin, Building2, Users, Calendar, Edit, CheckCircle2, XCircle, Clock, BookOpen, Heart, Footprints, CalendarDays, UserPlus, User as UserIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -125,7 +125,12 @@ export default function MosqueDetailsPage() {
     enabled: !!id,
   });
 
+  const { data: allMembersData } = useQuery<{ members: User[] }>({
+    queryKey: ["/api/members"],
+  });
+
   const mosque = mosqueData?.mosque;
+  const allMembers = allMembersData?.members || [];
   const thanas = thanasData?.thanas || [];
   const unions = unionsData?.unions || [];
   const halqas = halqasData?.halqas || [];
@@ -215,6 +220,16 @@ export default function MosqueDetailsPage() {
     }
     return filtered;
   }, [selectedThanaId, selectedUnionId, halqas]);
+
+  const availableMembers = useMemo(() => {
+    if (!mosque) return [];
+    return allMembers.filter(m => 
+      !m.mosqueId && 
+      m.role === "member" &&
+      m.thanaId === mosque.thanaId &&
+      m.unionId === mosque.unionId
+    );
+  }, [allMembers, mosque]);
 
   const openEditDialog = () => {
     if (mosque) {
@@ -310,27 +325,20 @@ export default function MosqueDetailsPage() {
     },
   });
 
-  const createMemberMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof memberFormSchema>) => {
-      const payload = {
-        ...data,
-        role: "member",
-        thanaId: mosque?.thanaId,
-        unionId: mosque?.unionId,
-        mosqueId: mosque?.id,
+  const addMemberToMosqueMutation = useMutation({
+    mutationFn: async (memberId: string) => {
+      await apiRequest("PUT", `/api/members/${memberId}`, { 
+        mosqueId: id,
         halqaId: mosque?.halqaId || null,
-      };
-      const response = await apiRequest("POST", "/api/auth/register", payload);
-      return response;
+      });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/members", { mosqueId: id }] });
       queryClient.invalidateQueries({ queryKey: ["/api/members"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/mosques", id] });
       setIsAddMemberOpen(false);
-      memberForm.reset();
       toast({
         title: "সফল হয়েছে",
-        description: "নতুন সাথী যোগ করা হয়েছে",
+        description: "সাথী মসজিদে যোগ করা হয়েছে",
       });
     },
     onError: (error: Error) => {
@@ -348,18 +356,6 @@ export default function MosqueDetailsPage() {
 
   const handleFiveTasksSubmit = (data: z.infer<typeof fiveTasksSchema>) => {
     updateFiveTasksMutation.mutate(data);
-  };
-
-  const handleMemberSubmit = (data: z.infer<typeof memberFormSchema>) => {
-    createMemberMutation.mutate(data);
-  };
-
-  const handleMemberActivityToggle = (activityId: string) => {
-    const current = selectedMemberActivities;
-    const updated = current.includes(activityId)
-      ? current.filter(id => id !== activityId)
-      : [...current, activityId];
-    memberForm.setValue("tabligActivities", updated);
   };
 
   if (mosqueLoading || !user) {
@@ -884,7 +880,7 @@ export default function MosqueDetailsPage() {
                       <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                         <FormLabel className="font-normal">দৈনিক মাশওয়ারা</FormLabel>
                         <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-daily-mashwara" />
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!fiveTasksActive} data-testid="switch-daily-mashwara" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -912,7 +908,7 @@ export default function MosqueDetailsPage() {
                       <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                         <FormLabel className="font-normal">দৈনিক তালিম</FormLabel>
                         <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-daily-talim" />
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!fiveTasksActive} data-testid="switch-daily-talim" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -940,7 +936,7 @@ export default function MosqueDetailsPage() {
                       <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                         <FormLabel className="font-normal">দৈনিক দাওয়াত/মেহনত</FormLabel>
                         <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-daily-dawah" />
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!fiveTasksActive} data-testid="switch-daily-dawah" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -968,7 +964,7 @@ export default function MosqueDetailsPage() {
                       <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                         <FormLabel className="font-normal">সাপ্তাহিক গাশত</FormLabel>
                         <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-weekly-gasht" />
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!fiveTasksActive} data-testid="switch-weekly-gasht" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -1009,7 +1005,7 @@ export default function MosqueDetailsPage() {
                       <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                         <FormLabel className="font-normal">মাসিক ৩ দিন</FormLabel>
                         <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-monthly-three-days" />
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!fiveTasksActive} data-testid="switch-monthly-three-days" />
                         </FormControl>
                       </FormItem>
                     )}
