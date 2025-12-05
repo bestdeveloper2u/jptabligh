@@ -1,4 +1,4 @@
-import { Building2, MapPin, Phone, Users } from "lucide-react";
+import { Building2, MapPin, Phone, Users, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import GlassCard from "./GlassCard";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,12 @@ interface MosqueCardProps {
   address: string;
   phone?: string;
   membersCount: number;
+  fiveTasksActive?: boolean;
+  dailyMashwara?: boolean;
+  dailyTalim?: boolean;
+  dailyDawah?: boolean;
+  weeklyGasht?: boolean;
+  monthlyThreeDays?: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
   onView?: () => void;
@@ -24,10 +30,17 @@ export default function MosqueCard({
   address,
   phone,
   membersCount,
+  fiveTasksActive,
+  dailyMashwara,
+  dailyTalim,
+  dailyDawah,
+  weeklyGasht,
+  monthlyThreeDays,
   onEdit,
   onDelete,
   onView,
 }: MosqueCardProps) {
+  const activeTasksCount = [dailyMashwara, dailyTalim, dailyDawah, weeklyGasht, monthlyThreeDays].filter(Boolean).length;
   return (
     <GlassCard className="hover-elevate transition-all" data-testid={`mosque-card-${id}`}>
       <div className="flex items-start justify-between mb-4">
@@ -60,6 +73,32 @@ export default function MosqueCard({
           <Users className="w-4 h-4" />
           <span data-testid="mosque-members">{membersCount} জন সাথী</span>
         </div>
+      </div>
+
+      {/* পাঁচ কাজের স্ট্যাটাস */}
+      <div className="mb-4 pt-3 border-t">
+        <div className="flex items-center gap-2 mb-2">
+          {fiveTasksActive ? (
+            <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+              <CheckCircle2 className="w-3 h-3 mr-1" />
+              পাঁচ কাজ চালু ({activeTasksCount}/৫)
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              <XCircle className="w-3 h-3 mr-1" />
+              পাঁচ কাজ চালু নেই
+            </Badge>
+          )}
+        </div>
+        {fiveTasksActive && activeTasksCount > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {dailyMashwara && <Badge variant="secondary" className="text-xs">মাশওয়ারা</Badge>}
+            {dailyTalim && <Badge variant="secondary" className="text-xs">তা'লিম</Badge>}
+            {dailyDawah && <Badge variant="secondary" className="text-xs">মেহনত</Badge>}
+            {weeklyGasht && <Badge variant="secondary" className="text-xs">গাশত</Badge>}
+            {monthlyThreeDays && <Badge variant="secondary" className="text-xs">৩ দিন</Badge>}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2">

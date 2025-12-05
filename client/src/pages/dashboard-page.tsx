@@ -68,6 +68,19 @@ const mosqueFormSchema = z.object({
   halqaId: z.string().optional(),
   imamPhone: z.string().optional(),
   muazzinPhone: z.string().optional(),
+  // পাঁচ কাজ (Five Tasks of Tablig)
+  fiveTasksActive: z.boolean().optional().default(false),
+  dailyMashwara: z.boolean().optional().default(false),
+  dailyTalim: z.boolean().optional().default(false),
+  dailyDawah: z.boolean().optional().default(false),
+  weeklyGasht: z.boolean().optional().default(false),
+  monthlyThreeDays: z.boolean().optional().default(false),
+  // সময়সূচী (Timing fields)
+  mashwaraTime: z.string().optional(),
+  talimTime: z.string().optional(),
+  dawahTime: z.string().optional(),
+  gashtDay: z.string().optional(),
+  threeDaysSchedule: z.string().optional(),
 });
 
 const halqaFormSchema = z.object({
@@ -768,6 +781,12 @@ export default function DashboardPage() {
                   address={mosque.address}
                   phone={mosque.phone || ""}
                   membersCount={0}
+                  fiveTasksActive={mosque.fiveTasksActive || false}
+                  dailyMashwara={mosque.dailyMashwara || false}
+                  dailyTalim={mosque.dailyTalim || false}
+                  dailyDawah={mosque.dailyDawah || false}
+                  weeklyGasht={mosque.weeklyGasht || false}
+                  monthlyThreeDays={mosque.monthlyThreeDays || false}
                   onView={() => setLocation(`/mosque/${mosque.id}`)}
                   onEdit={canManage ? () => setEditMosque(mosque) : undefined}
                   onDelete={canManage ? () => handleDeleteMosque(mosque.id) : undefined}
@@ -924,6 +943,12 @@ export default function DashboardPage() {
               address={mosque.address}
               phone={mosque.phone || ""}
               membersCount={0}
+              fiveTasksActive={mosque.fiveTasksActive || false}
+              dailyMashwara={mosque.dailyMashwara || false}
+              dailyTalim={mosque.dailyTalim || false}
+              dailyDawah={mosque.dailyDawah || false}
+              weeklyGasht={mosque.weeklyGasht || false}
+              monthlyThreeDays={mosque.monthlyThreeDays || false}
               onView={() => setLocation(`/mosque/${mosque.id}`)}
               onEdit={canManage ? () => setEditMosque(mosque) : undefined}
               onDelete={canManage ? () => handleDeleteMosque(mosque.id) : undefined}
@@ -1909,7 +1934,7 @@ export default function DashboardPage() {
 
       {/* Edit Mosque Dialog */}
       <Dialog open={!!editMosque} onOpenChange={() => setEditMosque(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>মসজিদের তথ্য সম্পাদনা</DialogTitle>
           </DialogHeader>
@@ -2293,8 +2318,21 @@ function AddMosqueDialog({
       halqaId: "",
       imamPhone: "",
       muazzinPhone: "",
+      fiveTasksActive: false,
+      dailyMashwara: false,
+      dailyTalim: false,
+      dailyDawah: false,
+      weeklyGasht: false,
+      monthlyThreeDays: false,
+      mashwaraTime: "",
+      talimTime: "",
+      dawahTime: "",
+      gashtDay: "",
+      threeDaysSchedule: "",
     },
   });
+  
+  const fiveTasksActive = form.watch("fiveTasksActive");
 
   const selectedThana = form.watch("thanaId");
   const selectedUnion = form.watch("unionId");
@@ -2499,6 +2537,214 @@ function AddMosqueDialog({
                   </FormItem>
                 )}
               />
+            </div>
+
+            {/* পাঁচ কাজ সেকশন */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <FormField
+                control={form.control}
+                name="fiveTasksActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-five-tasks-active"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-base font-semibold">
+                        তাবলীগের পাঁচ কাজ চালু আছে
+                      </FormLabel>
+                      <p className="text-sm text-muted-foreground">
+                        এই মসজিদে তাবলীগের পাঁচটি কাজ চালু থাকলে টিক দিন
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              {fiveTasksActive && (
+                <div className="space-y-4 pt-4 border-t">
+                  <h4 className="font-medium text-sm text-muted-foreground">কোন কোন কাজ চালু আছে:</h4>
+                  
+                  {/* প্রতিদিন মাশওয়ারা */}
+                  <div className="grid md:grid-cols-2 gap-4 items-start">
+                    <FormField
+                      control={form.control}
+                      name="dailyMashwara"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-daily-mashwara"
+                            />
+                          </FormControl>
+                          <FormLabel>প্রতিদিন মাশওয়ারা</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="mashwaraTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input 
+                              placeholder="যেমন: ফজরের পর / এশার পর" 
+                              {...field} 
+                              data-testid="input-mashwara-time"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* প্রতিদিন তা'লিম */}
+                  <div className="grid md:grid-cols-2 gap-4 items-start">
+                    <FormField
+                      control={form.control}
+                      name="dailyTalim"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-daily-talim"
+                            />
+                          </FormControl>
+                          <FormLabel>প্রতিদিন তা'লিম</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="talimTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input 
+                              placeholder="যেমন: মাগরিবের পর / এশার পর" 
+                              {...field} 
+                              data-testid="input-talim-time"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* প্রতিদিন দাওয়াতের মেহনত */}
+                  <div className="grid md:grid-cols-2 gap-4 items-start">
+                    <FormField
+                      control={form.control}
+                      name="dailyDawah"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-daily-dawah"
+                            />
+                          </FormControl>
+                          <FormLabel>প্রতিদিন আড়াই ঘণ্টা মেহনত</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="dawahTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input 
+                              placeholder="যেমন: আসরের পর / জোহরের পর" 
+                              {...field} 
+                              data-testid="input-dawah-time"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* সাপ্তাহিক গাশত */}
+                  <div className="grid md:grid-cols-2 gap-4 items-start">
+                    <FormField
+                      control={form.control}
+                      name="weeklyGasht"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-weekly-gasht"
+                            />
+                          </FormControl>
+                          <FormLabel>সাপ্তাহিক গাশত</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="gashtDay"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input 
+                              placeholder="যেমন: বৃহস্পতিবার মাগরিবের পর" 
+                              {...field} 
+                              data-testid="input-gasht-day"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* মাসে ৩ দিন */}
+                  <div className="grid md:grid-cols-2 gap-4 items-start">
+                    <FormField
+                      control={form.control}
+                      name="monthlyThreeDays"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-monthly-three-days"
+                            />
+                          </FormControl>
+                          <FormLabel>প্রতি মাসে ৩ দিন</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="threeDaysSchedule"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input 
+                              placeholder="যেমন: মাসের প্রথম সপ্তাহে" 
+                              {...field} 
+                              data-testid="input-three-days-schedule"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3">
@@ -3005,6 +3251,18 @@ function EditMosqueForm({
   const [address, setAddress] = useState(mosque.address);
   const [imamPhone, setImamPhone] = useState(mosque.imamPhone || "");
   const [muazzinPhone, setMuazzinPhone] = useState(mosque.muazzinPhone || "");
+  // পাঁচ কাজের স্টেট
+  const [fiveTasksActive, setFiveTasksActive] = useState(mosque.fiveTasksActive || false);
+  const [dailyMashwara, setDailyMashwara] = useState(mosque.dailyMashwara || false);
+  const [dailyTalim, setDailyTalim] = useState(mosque.dailyTalim || false);
+  const [dailyDawah, setDailyDawah] = useState(mosque.dailyDawah || false);
+  const [weeklyGasht, setWeeklyGasht] = useState(mosque.weeklyGasht || false);
+  const [monthlyThreeDays, setMonthlyThreeDays] = useState(mosque.monthlyThreeDays || false);
+  const [mashwaraTime, setMashwaraTime] = useState(mosque.mashwaraTime || "");
+  const [talimTime, setTalimTime] = useState(mosque.talimTime || "");
+  const [dawahTime, setDawahTime] = useState(mosque.dawahTime || "");
+  const [gashtDay, setGashtDay] = useState(mosque.gashtDay || "");
+  const [threeDaysSchedule, setThreeDaysSchedule] = useState(mosque.threeDaysSchedule || "");
 
   const { data: unionsData } = useQuery<{ unions: Union[] }>({
     queryKey: ["/api/unions", { thanaId: selectedThana }],
@@ -3031,8 +3289,19 @@ function EditMosqueForm({
       thanaId: selectedThana,
       unionId: selectedUnion,
       halqaId: selectedHalqa === "none" ? null : selectedHalqa || null,
-      imamPhone: imamPhone || undefined,
-      muazzinPhone: muazzinPhone || undefined,
+      imamPhone: imamPhone || null,
+      muazzinPhone: muazzinPhone || null,
+      fiveTasksActive: !!fiveTasksActive,
+      dailyMashwara: !!dailyMashwara,
+      dailyTalim: !!dailyTalim,
+      dailyDawah: !!dailyDawah,
+      weeklyGasht: !!weeklyGasht,
+      monthlyThreeDays: !!monthlyThreeDays,
+      mashwaraTime: mashwaraTime || null,
+      talimTime: talimTime || null,
+      dawahTime: dawahTime || null,
+      gashtDay: gashtDay || null,
+      threeDaysSchedule: threeDaysSchedule || null,
     });
   };
 
@@ -3096,6 +3365,71 @@ function EditMosqueForm({
           <Input value={muazzinPhone} onChange={(e) => setMuazzinPhone(e.target.value)} data-testid="input-edit-muazzin-phone" />
         </div>
       </div>
+
+      {/* পাঁচ কাজ সেকশন */}
+      <div className="border rounded-lg p-4 space-y-4">
+        <div className="flex items-center space-x-3">
+          <Checkbox
+            checked={fiveTasksActive}
+            onCheckedChange={(checked) => setFiveTasksActive(!!checked)}
+            id="edit-five-tasks"
+            data-testid="checkbox-edit-five-tasks"
+          />
+          <div>
+            <Label htmlFor="edit-five-tasks" className="text-base font-semibold cursor-pointer">
+              তাবলীগের পাঁচ কাজ চালু আছে
+            </Label>
+            <p className="text-sm text-muted-foreground">এই মসজিদে তাবলীগের পাঁচটি কাজ চালু থাকলে টিক দিন</p>
+          </div>
+        </div>
+
+        {fiveTasksActive && (
+          <div className="space-y-3 pt-3 border-t">
+            <p className="text-sm font-medium text-muted-foreground">কোন কোন কাজ চালু আছে:</p>
+            
+            <div className="grid md:grid-cols-2 gap-3 items-center">
+              <div className="flex items-center space-x-2">
+                <Checkbox checked={dailyMashwara} onCheckedChange={(c) => setDailyMashwara(!!c)} id="edit-mashwara" />
+                <Label htmlFor="edit-mashwara" className="cursor-pointer">প্রতিদিন মাশওয়ারা</Label>
+              </div>
+              <Input placeholder="সময় (যেমন: ফজরের পর)" value={mashwaraTime} onChange={(e) => setMashwaraTime(e.target.value)} />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3 items-center">
+              <div className="flex items-center space-x-2">
+                <Checkbox checked={dailyTalim} onCheckedChange={(c) => setDailyTalim(!!c)} id="edit-talim" />
+                <Label htmlFor="edit-talim" className="cursor-pointer">প্রতিদিন তা'লিম</Label>
+              </div>
+              <Input placeholder="সময় (যেমন: মাগরিবের পর)" value={talimTime} onChange={(e) => setTalimTime(e.target.value)} />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3 items-center">
+              <div className="flex items-center space-x-2">
+                <Checkbox checked={dailyDawah} onCheckedChange={(c) => setDailyDawah(!!c)} id="edit-dawah" />
+                <Label htmlFor="edit-dawah" className="cursor-pointer">প্রতিদিন আড়াই ঘণ্টা মেহনত</Label>
+              </div>
+              <Input placeholder="সময় (যেমন: আসরের পর)" value={dawahTime} onChange={(e) => setDawahTime(e.target.value)} />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3 items-center">
+              <div className="flex items-center space-x-2">
+                <Checkbox checked={weeklyGasht} onCheckedChange={(c) => setWeeklyGasht(!!c)} id="edit-gasht" />
+                <Label htmlFor="edit-gasht" className="cursor-pointer">সাপ্তাহিক গাশত</Label>
+              </div>
+              <Input placeholder="দিন ও সময় (যেমন: বৃহস্পতিবার মাগরিবের পর)" value={gashtDay} onChange={(e) => setGashtDay(e.target.value)} />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3 items-center">
+              <div className="flex items-center space-x-2">
+                <Checkbox checked={monthlyThreeDays} onCheckedChange={(c) => setMonthlyThreeDays(!!c)} id="edit-three-days" />
+                <Label htmlFor="edit-three-days" className="cursor-pointer">প্রতি মাসে ৩ দিন</Label>
+              </div>
+              <Input placeholder="সময়সূচী (যেমন: মাসের প্রথম সপ্তাহে)" value={threeDaysSchedule} onChange={(e) => setThreeDaysSchedule(e.target.value)} />
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex justify-end gap-3">
         <Button type="button" variant="outline" onClick={onCancel}>বাতিল</Button>
         <Button type="submit" disabled={isLoading} data-testid="button-save-edit-mosque">{isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}</Button>
