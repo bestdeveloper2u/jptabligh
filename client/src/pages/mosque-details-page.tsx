@@ -62,22 +62,6 @@ const fiveTasksSchema = z.object({
   threeDaysSchedule: z.string().optional(),
 });
 
-const memberFormSchema = z.object({
-  name: z.string().min(1, "নাম আবশ্যক"),
-  email: z.string().email("সঠিক ইমেইল দিন").optional().or(z.literal("")),
-  phone: z.string().min(11, "সঠিক মোবাইল নাম্বার দিন"),
-  password: z.string().min(6, "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে"),
-  tabligActivities: z.array(z.string()).optional(),
-});
-
-const tabligActivitiesOptions = [
-  { id: "daily_talim", label: "দৈনিক তা'লিম" },
-  { id: "daily_mashwara", label: "দৈনিক মাশওয়ারা" },
-  { id: "weekly_gasht", label: "সাপ্তাহিক গাশত" },
-  { id: "monthly_3_days", label: "মাসিক ৩ দিন" },
-  { id: "yearly_chilla", label: "বাৎসরিক চিল্লা" },
-  { id: "dawah_work", label: "দাওয়াতের কাজ" },
-];
 
 export default function MosqueDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -178,19 +162,6 @@ export default function MosqueDetailsPage() {
       threeDaysSchedule: "",
     },
   });
-
-  const memberForm = useForm<z.infer<typeof memberFormSchema>>({
-    resolver: zodResolver(memberFormSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      password: "",
-      tabligActivities: [],
-    },
-  });
-
-  const selectedMemberActivities = memberForm.watch("tabligActivities") || [];
 
   const selectedThanaId = form.watch("thanaId");
   const selectedUnionId = form.watch("unionId");
@@ -1043,135 +1014,46 @@ export default function MosqueDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Member Dialog */}
+      {/* Add Member Dialog - Selection based like halqa */}
       <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>নতুন সাথী যোগ করুন</DialogTitle>
-            <DialogDescription>
-              {mosque.name} মসজিদে নতুন তাবলীগ সাথী যোগ করুন
-            </DialogDescription>
+            <DialogTitle>মসজিদে সাথী যোগ করুন</DialogTitle>
+            <DialogDescription>এই মসজিদে সাথী যোগ করতে নিচের তালিকা থেকে নির্বাচন করুন</DialogDescription>
           </DialogHeader>
-
-          {/* Pre-filled mosque info */}
-          <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-            <h4 className="font-medium text-sm text-muted-foreground">মসজিদের তথ্য (স্বয়ংক্রিয়ভাবে নির্বাচিত)</h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div><span className="text-muted-foreground">মসজিদ:</span> {mosque.name}</div>
-              <div><span className="text-muted-foreground">থানা:</span> {thanaName}</div>
-              <div><span className="text-muted-foreground">ইউনিয়ন:</span> {unionName}</div>
-              {halqaName && <div><span className="text-muted-foreground">হালকা:</span> {halqaName}</div>}
-            </div>
-          </div>
-
-          <Form {...memberForm}>
-            <form onSubmit={memberForm.handleSubmit(handleMemberSubmit)} className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-4">
-                <FormField
-                  control={memberForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>পূর্ণ নাম *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="নাম লিখুন" {...field} data-testid="input-new-member-name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={memberForm.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>মোবাইল নাম্বার *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="০১৭১২৩৪৫৬৭৮" {...field} data-testid="input-new-member-phone" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          <div className="space-y-4">
+            {availableMembers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>কোনো নতুন সাথী পাওয়া যায়নি</p>
+                <p className="text-sm mt-2">এই এলাকায় সব সাথী ইতিমধ্যে কোনো মসজিদে যুক্ত আছে</p>
               </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <FormField
-                  control={memberForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ইমেইল (ঐচ্ছিক)</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="example@email.com" {...field} data-testid="input-new-member-email" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={memberForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>পাসওয়ার্ড *</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} data-testid="input-new-member-password" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <FormLabel>তাবলীগী কার্যক্রম</FormLabel>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {tabligActivitiesOptions.map((activity) => (
-                    <div
-                      key={activity.id}
-                      className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${
-                        selectedMemberActivities.includes(activity.id)
-                          ? 'bg-primary/10 border-primary'
-                          : 'hover-elevate'
-                      }`}
-                      onClick={() => handleMemberActivityToggle(activity.id)}
-                      data-testid={`activity-toggle-${activity.id}`}
-                    >
-                      <Checkbox
-                        checked={selectedMemberActivities.includes(activity.id)}
-                        onCheckedChange={() => handleMemberActivityToggle(activity.id)}
-                      />
-                      <span className="text-sm">{activity.label}</span>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {availableMembers.map((member) => (
+                  <Button
+                    key={member.id}
+                    variant="outline"
+                    className="w-full justify-start gap-3"
+                    onClick={() => {
+                      addMemberToMosqueMutation.mutate(member.id);
+                    }}
+                    disabled={addMemberToMosqueMutation.isPending}
+                    data-testid={`button-add-member-${member.id}`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <UserIcon className="w-5 h-5 text-primary" />
                     </div>
-                  ))}
-                </div>
+                    <div className="text-left flex-1">
+                      <p className="font-medium">{member.name}</p>
+                      <p className="text-xs text-muted-foreground">{member.phone}</p>
+                    </div>
+                    <UserPlus className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                ))}
               </div>
-
-              <div className="flex justify-end gap-2 pt-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => {
-                    setIsAddMemberOpen(false);
-                    memberForm.reset();
-                  }}
-                  data-testid="button-cancel-add-member"
-                >
-                  বাতিল
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={createMemberMutation.isPending}
-                  data-testid="button-save-new-member"
-                >
-                  {createMemberMutation.isPending ? "সংরক্ষণ হচ্ছে..." : "সাথী যোগ করুন"}
-                </Button>
-              </div>
-            </form>
-          </Form>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
