@@ -955,7 +955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/settings", requireAuth, requireRole("super_admin"), async (req, res) => {
     try {
       const { key, value } = req.body;
-      if (!key || !value) {
+      if (!key || value === undefined || value === null) {
         return res.status(400).json({ error: "কী এবং ভ্যালু প্রয়োজন" });
       }
       
