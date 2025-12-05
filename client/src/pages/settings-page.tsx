@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Moon, Sun, Monitor, Image, Type, Save, Upload } from "lucide-react";
+import { ArrowLeft, Moon, Sun, Monitor, Image, Type, Save, Upload, Clock } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -13,12 +13,16 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 
-type ThemeMode = "light" | "dark" | "system";
+type ThemeMode = "light" | "dark" | "system" | "schedule";
+type LogoType = "logo" | "text" | "both";
 
 interface SiteSettings {
   siteTitle: string;
   siteLogo: string;
   themeMode: ThemeMode;
+  logoType: LogoType;
+  darkModeStart: string;
+  darkModeEnd: string;
 }
 
 export default function SettingsPage() {
@@ -30,43 +34,63 @@ export default function SettingsPage() {
   const [siteTitle, setSiteTitle] = useState("জামালপুর তাবলীগ");
   const [siteLogo, setSiteLogo] = useState("");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoType, setLogoType] = useState<LogoType>("text");
+  const [darkModeStart, setDarkModeStart] = useState("18:00");
+  const [darkModeEnd, setDarkModeEnd] = useState("06:00");
 
   const canManageSettings = user?.role === "super_admin";
 
-  const { data: settingsData, isLoading } = useQuery<{ settings: Array<{ key: string; value: string }> }>({
+  const { data: settingsData, isLoading } = useQuery<{ settings: Record<string, string> }>({
     queryKey: ["/api/settings"],
   });
 
   useEffect(() => {
     if (settingsData?.settings) {
       const settings = settingsData.settings;
-      const themeSetting = settings.find(s => s.key === "themeMode");
-      const titleSetting = settings.find(s => s.key === "siteTitle");
-      const logoSetting = settings.find(s => s.key === "siteLogo");
       
-      if (themeSetting) setThemeMode(themeSetting.value as ThemeMode);
-      if (titleSetting) setSiteTitle(titleSetting.value);
-      if (logoSetting) {
-        setSiteLogo(logoSetting.value);
-        setLogoPreview(logoSetting.value);
+      if (settings.themeMode) setThemeMode(settings.themeMode as ThemeMode);
+      if (settings.siteTitle) setSiteTitle(settings.siteTitle);
+      if (settings.siteLogo) {
+        setSiteLogo(settings.siteLogo);
+        setLogoPreview(settings.siteLogo);
       }
+      if (settings.logoType) setLogoType(settings.logoType as LogoType);
+      if (settings.darkModeStart) setDarkModeStart(settings.darkModeStart);
+      if (settings.darkModeEnd) setDarkModeEnd(settings.darkModeEnd);
     }
   }, [settingsData]);
 
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("themeMode") as ThemeMode | null;
-    if (savedTheme) {
-      setThemeMode(savedTheme);
+  const isInDarkModeSchedule = useCallback((startTime: string, endTime: string) => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    const [startHour, startMin] = startTime.split(":").map(Number);
+    const [endHour, endMin] = endTime.split(":").map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    if (startMinutes < endMinutes) {
+      return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    } else {
+      return currentMinutes >= startMinutes || currentMinutes < endMinutes;
     }
-    applyTheme(savedTheme || "system");
   }, []);
 
-  const applyTheme = (mode: ThemeMode) => {
+  const applyTheme = useCallback((mode: ThemeMode, startTime?: string, endTime?: string) => {
     const root = document.documentElement;
     
     if (mode === "system") {
       const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       if (systemDark) {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
+    } else if (mode === "schedule") {
+      const start = startTime || darkModeStart;
+      const end = endTime || darkModeEnd;
+      if (isInDarkModeSchedule(start, end)) {
         root.classList.add("dark");
       } else {
         root.classList.remove("dark");
@@ -78,11 +102,50 @@ export default function SettingsPage() {
     }
     
     localStorage.setItem("themeMode", mode);
-  };
+    if (startTime) localStorage.setItem("darkModeStart", startTime);
+    if (endTime) localStorage.setItem("darkModeEnd", endTime);
+  }, [darkModeStart, darkModeEnd, isInDarkModeSchedule]);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("themeMode") as ThemeMode | null;
+    const savedStart = localStorage.getItem("darkModeStart");
+    const savedEnd = localStorage.getItem("darkModeEnd");
+    
+    if (savedTheme) {
+      setThemeMode(savedTheme);
+    }
+    if (savedStart) setDarkModeStart(savedStart);
+    if (savedEnd) setDarkModeEnd(savedEnd);
+    
+    applyTheme(savedTheme || "system", savedStart || "18:00", savedEnd || "06:00");
+  }, []);
+
+  useEffect(() => {
+    if (themeMode === "schedule") {
+      const interval = setInterval(() => {
+        applyTheme("schedule", darkModeStart, darkModeEnd);
+      }, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [themeMode, darkModeStart, darkModeEnd, applyTheme]);
 
   const handleThemeChange = (mode: ThemeMode) => {
     setThemeMode(mode);
-    applyTheme(mode);
+    applyTheme(mode, darkModeStart, darkModeEnd);
+  };
+
+  const handleScheduleTimeChange = (type: "start" | "end", value: string) => {
+    if (type === "start") {
+      setDarkModeStart(value);
+      if (themeMode === "schedule") {
+        applyTheme("schedule", value, darkModeEnd);
+      }
+    } else {
+      setDarkModeEnd(value);
+      if (themeMode === "schedule") {
+        applyTheme("schedule", darkModeStart, value);
+      }
+    }
   };
 
   const saveSettingsMutation = useMutation({
@@ -125,6 +188,9 @@ export default function SettingsPage() {
       { key: "themeMode", value: themeMode },
       { key: "siteTitle", value: siteTitle },
       { key: "siteLogo", value: siteLogo },
+      { key: "logoType", value: logoType },
+      { key: "darkModeStart", value: darkModeStart },
+      { key: "darkModeEnd", value: darkModeEnd },
     ];
     saveSettingsMutation.mutate(settings);
   };
@@ -174,11 +240,11 @@ export default function SettingsPage() {
                 আপনার পছন্দের রঙের থিম নির্বাচন করুন
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               <RadioGroup
                 value={themeMode}
                 onValueChange={(value) => handleThemeChange(value as ThemeMode)}
-                className="grid grid-cols-3 gap-4"
+                className="grid grid-cols-2 sm:grid-cols-4 gap-4"
               >
                 <div>
                   <RadioGroupItem
@@ -225,7 +291,61 @@ export default function SettingsPage() {
                     <span className="text-sm font-medium">সিস্টেম</span>
                   </Label>
                 </div>
+                <div>
+                  <RadioGroupItem
+                    value="schedule"
+                    id="schedule"
+                    className="peer sr-only"
+                  />
+                  <Label
+                    htmlFor="schedule"
+                    className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                    data-testid="theme-schedule"
+                  >
+                    <Clock className="mb-3 h-6 w-6" />
+                    <span className="text-sm font-medium">সিডিউল</span>
+                  </Label>
+                </div>
               </RadioGroup>
+
+              {themeMode === "schedule" && (
+                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                  <p className="text-sm text-muted-foreground">
+                    নির্ধারিত সময় অনুযায়ী স্বয়ংক্রিয়ভাবে ডার্ক/লাইট মোড পরিবর্তন হবে
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="darkModeStart" className="flex items-center gap-2 text-sm">
+                        <Moon className="w-4 h-4" />
+                        ডার্ক মোড শুরু
+                      </Label>
+                      <Input
+                        id="darkModeStart"
+                        type="time"
+                        value={darkModeStart}
+                        onChange={(e) => handleScheduleTimeChange("start", e.target.value)}
+                        data-testid="input-dark-mode-start"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="darkModeEnd" className="flex items-center gap-2 text-sm">
+                        <Sun className="w-4 h-4" />
+                        লাইট মোড শুরু
+                      </Label>
+                      <Input
+                        id="darkModeEnd"
+                        type="time"
+                        value={darkModeEnd}
+                        onChange={(e) => handleScheduleTimeChange("end", e.target.value)}
+                        data-testid="input-dark-mode-end"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    উদাহরণ: সন্ধ্যা ৬টা থেকে সকাল ৬টা পর্যন্ত ডার্ক মোড থাকবে
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -242,67 +362,157 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="siteTitle" className="flex items-center gap-2">
-                    <Type className="w-4 h-4" />
-                    সাইট টাইটেল
-                  </Label>
-                  <Input
-                    id="siteTitle"
-                    value={siteTitle}
-                    onChange={(e) => setSiteTitle(e.target.value)}
-                    placeholder="সাইটের নাম লিখুন"
-                    data-testid="input-site-title"
-                  />
+                {/* Logo Type Selection */}
+                <div className="space-y-4">
+                  <Label className="text-sm font-medium">হেডারে কি দেখাবে?</Label>
+                  <RadioGroup
+                    value={logoType}
+                    onValueChange={(value) => setLogoType(value as LogoType)}
+                    className="grid grid-cols-3 gap-4"
+                  >
+                    <div>
+                      <RadioGroupItem
+                        value="text"
+                        id="logoType-text"
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor="logoType-text"
+                        className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                        data-testid="logo-type-text"
+                      >
+                        <Type className="mb-3 h-6 w-6" />
+                        <span className="text-sm font-medium">শুধু টেক্সট</span>
+                      </Label>
+                    </div>
+                    <div>
+                      <RadioGroupItem
+                        value="logo"
+                        id="logoType-logo"
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor="logoType-logo"
+                        className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                        data-testid="logo-type-logo"
+                      >
+                        <Image className="mb-3 h-6 w-6" />
+                        <span className="text-sm font-medium">শুধু লোগো</span>
+                      </Label>
+                    </div>
+                    <div>
+                      <RadioGroupItem
+                        value="both"
+                        id="logoType-both"
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor="logoType-both"
+                        className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                        data-testid="logo-type-both"
+                      >
+                        <div className="flex items-center gap-1 mb-3">
+                          <Image className="h-5 w-5" />
+                          <Type className="h-5 w-5" />
+                        </div>
+                        <span className="text-sm font-medium">দুটোই</span>
+                      </Label>
+                    </div>
+                  </RadioGroup>
                 </div>
 
                 <Separator />
 
-                <div className="space-y-4">
-                  <Label className="flex items-center gap-2">
-                    <Image className="w-4 h-4" />
-                    সাইট লোগো
-                  </Label>
-                  
-                  {logoPreview && (
-                    <div className="flex items-center gap-4">
-                      <div className="w-20 h-20 rounded-lg border overflow-hidden bg-muted flex items-center justify-center">
-                        <img 
-                          src={logoPreview} 
-                          alt="Logo Preview" 
-                          className="max-w-full max-h-full object-contain"
-                        />
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setLogoPreview(null);
-                          setSiteLogo("");
-                        }}
-                        data-testid="button-remove-logo"
-                      >
-                        লোগো সরান
-                      </Button>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center gap-4">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoUpload}
-                      className="hidden"
-                      id="logo-upload"
-                      data-testid="input-logo-upload"
-                    />
-                    <Label
-                      htmlFor="logo-upload"
-                      className="flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer hover-elevate"
-                    >
-                      <Upload className="w-4 h-4" />
-                      লোগো আপলোড করুন
+                {/* Site Title - Show if text or both selected */}
+                {(logoType === "text" || logoType === "both") && (
+                  <div className="space-y-2">
+                    <Label htmlFor="siteTitle" className="flex items-center gap-2">
+                      <Type className="w-4 h-4" />
+                      সাইট টাইটেল
                     </Label>
+                    <Input
+                      id="siteTitle"
+                      value={siteTitle}
+                      onChange={(e) => setSiteTitle(e.target.value)}
+                      placeholder="সাইটের নাম লিখুন"
+                      data-testid="input-site-title"
+                    />
+                  </div>
+                )}
+
+                {/* Logo Upload - Show if logo or both selected */}
+                {(logoType === "logo" || logoType === "both") && (
+                  <>
+                    {logoType === "both" && <Separator />}
+                    <div className="space-y-4">
+                      <Label className="flex items-center gap-2">
+                        <Image className="w-4 h-4" />
+                        সাইট লোগো
+                      </Label>
+                      
+                      {logoPreview && (
+                        <div className="flex items-center gap-4">
+                          <div className="w-20 h-20 rounded-lg border overflow-hidden bg-muted flex items-center justify-center">
+                            <img 
+                              src={logoPreview} 
+                              alt="Logo Preview" 
+                              className="max-w-full max-h-full object-contain"
+                            />
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setLogoPreview(null);
+                              setSiteLogo("");
+                            }}
+                            data-testid="button-remove-logo"
+                          >
+                            লোগো সরান
+                          </Button>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center gap-4">
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          className="hidden"
+                          id="logo-upload"
+                          data-testid="input-logo-upload"
+                        />
+                        <Label
+                          htmlFor="logo-upload"
+                          className="flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer hover-elevate"
+                        >
+                          <Upload className="w-4 h-4" />
+                          লোগো আপলোড করুন
+                        </Label>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <Separator />
+
+                {/* Preview */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">প্রিভিউ</Label>
+                  <div className="p-4 rounded-lg border bg-muted/30 flex items-center gap-3">
+                    {(logoType === "logo" || logoType === "both") && logoPreview && (
+                      <img 
+                        src={logoPreview} 
+                        alt="Logo" 
+                        className="w-10 h-10 object-contain"
+                      />
+                    )}
+                    {(logoType === "text" || logoType === "both") && (
+                      <span className="text-lg font-bold">{siteTitle || "সাইটের নাম"}</span>
+                    )}
+                    {logoType === "logo" && !logoPreview && (
+                      <span className="text-muted-foreground">লোগো আপলোড করুন</span>
+                    )}
                   </div>
                 </div>
 

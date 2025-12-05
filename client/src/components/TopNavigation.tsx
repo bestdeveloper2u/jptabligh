@@ -1,4 +1,4 @@
-import { Bell, Menu, Moon, Sun, LogOut, ClipboardList, CheckCircle } from "lucide-react";
+import { Bell, Menu, Moon, Sun, LogOut, ClipboardList, CheckCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,8 +9,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useQuery } from "@tanstack/react-query";
 
 interface Notification {
   id: string;
@@ -20,6 +21,9 @@ interface Notification {
   status: string;
   createdAt: string | Date;
 }
+
+type ThemeMode = "light" | "dark" | "system" | "schedule";
+type LogoType = "logo" | "text" | "both";
 
 interface TopNavigationProps {
   userName: string;
@@ -61,15 +65,145 @@ export default function TopNavigation({
   onProfileClick,
   onSettingsClick
 }: TopNavigationProps) {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [darkModeStart, setDarkModeStart] = useState("18:00");
+  const [darkModeEnd, setDarkModeEnd] = useState("06:00");
+  
   const initials = userName.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
   
   const pendingNotifications = notifications.filter(n => n.status !== "completed");
   const hasNotifications = pendingNotifications.length > 0;
 
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle("dark");
+  const { data: settingsData } = useQuery<{ settings: Record<string, string> }>({
+    queryKey: ["/api/settings"],
+  });
+
+  const siteTitle = settingsData?.settings?.siteTitle || "জামালপুর তাবলীগ";
+  const siteLogo = settingsData?.settings?.siteLogo || "";
+  const logoType: LogoType = (settingsData?.settings?.logoType as LogoType) || "text";
+
+  const isInDarkModeSchedule = useCallback((startTime: string, endTime: string) => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    const [startHour, startMin] = startTime.split(":").map(Number);
+    const [endHour, endMin] = endTime.split(":").map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    if (startMinutes < endMinutes) {
+      return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    } else {
+      return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+    }
+  }, []);
+
+  const applyTheme = useCallback((mode: ThemeMode, startTime?: string, endTime?: string) => {
+    const root = document.documentElement;
+    
+    if (mode === "system") {
+      const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (systemDark) {
+        root.classList.add("dark");
+        setIsDark(true);
+      } else {
+        root.classList.remove("dark");
+        setIsDark(false);
+      }
+    } else if (mode === "schedule") {
+      const start = startTime || darkModeStart;
+      const end = endTime || darkModeEnd;
+      if (isInDarkModeSchedule(start, end)) {
+        root.classList.add("dark");
+        setIsDark(true);
+      } else {
+        root.classList.remove("dark");
+        setIsDark(false);
+      }
+    } else if (mode === "dark") {
+      root.classList.add("dark");
+      setIsDark(true);
+    } else {
+      root.classList.remove("dark");
+      setIsDark(false);
+    }
+  }, [darkModeStart, darkModeEnd, isInDarkModeSchedule]);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("themeMode") as ThemeMode | null;
+    const savedStart = localStorage.getItem("darkModeStart");
+    const savedEnd = localStorage.getItem("darkModeEnd");
+    
+    if (savedTheme) setThemeMode(savedTheme);
+    if (savedStart) setDarkModeStart(savedStart);
+    if (savedEnd) setDarkModeEnd(savedEnd);
+    
+    applyTheme(savedTheme || "system", savedStart || "18:00", savedEnd || "06:00");
+  }, []);
+
+  useEffect(() => {
+    if (settingsData?.settings) {
+      const settings = settingsData.settings;
+      const apiTheme = settings.themeMode as ThemeMode | undefined;
+      const apiStart = settings.darkModeStart;
+      const apiEnd = settings.darkModeEnd;
+      
+      if (apiTheme) {
+        setThemeMode(apiTheme);
+        localStorage.setItem("themeMode", apiTheme);
+      }
+      if (apiStart) {
+        setDarkModeStart(apiStart);
+        localStorage.setItem("darkModeStart", apiStart);
+      }
+      if (apiEnd) {
+        setDarkModeEnd(apiEnd);
+        localStorage.setItem("darkModeEnd", apiEnd);
+      }
+      
+      if (apiTheme || apiStart || apiEnd) {
+        applyTheme(
+          apiTheme || themeMode, 
+          apiStart || darkModeStart, 
+          apiEnd || darkModeEnd
+        );
+      }
+    }
+  }, [settingsData]);
+
+  useEffect(() => {
+    if (themeMode === "schedule") {
+      const interval = setInterval(() => {
+        applyTheme("schedule", darkModeStart, darkModeEnd);
+      }, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [themeMode, darkModeStart, darkModeEnd, applyTheme]);
+
+  const cycleTheme = () => {
+    const modes: ThemeMode[] = ["light", "dark", "system", "schedule"];
+    const currentIndex = modes.indexOf(themeMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    const nextMode = modes[nextIndex];
+    
+    setThemeMode(nextMode);
+    localStorage.setItem("themeMode", nextMode);
+    applyTheme(nextMode, darkModeStart, darkModeEnd);
+  };
+
+  const getThemeIcon = () => {
+    switch (themeMode) {
+      case "light":
+        return <Sun className="w-5 h-5" />;
+      case "dark":
+        return <Moon className="w-5 h-5" />;
+      case "schedule":
+        return <Clock className="w-5 h-5" />;
+      default:
+        return isDark ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />;
+    }
   };
 
   return (
@@ -85,9 +219,27 @@ export default function TopNavigation({
           >
             <Menu className="w-5 h-5" />
           </Button>
-          <div>
-            <h1 className="text-xl font-bold">জামালপুর তাবলীগ</h1>
-            <p className="text-xs text-muted-foreground">সাথী ব্যবস্থাপনা সিস্টেম</p>
+          <div className="flex items-center gap-3">
+            {(logoType === "logo" || logoType === "both") && siteLogo && (
+              <img 
+                src={siteLogo} 
+                alt="Logo" 
+                className="w-10 h-10 object-contain"
+                data-testid="img-site-logo"
+              />
+            )}
+            {(logoType === "text" || logoType === "both") && (
+              <div>
+                <h1 className="text-xl font-bold" data-testid="text-site-title">{siteTitle}</h1>
+                <p className="text-xs text-muted-foreground">সাথী ব্যবস্থাপনা সিস্টেম</p>
+              </div>
+            )}
+            {logoType === "logo" && !siteLogo && (
+              <div>
+                <h1 className="text-xl font-bold">জামালপুর তাবলীগ</h1>
+                <p className="text-xs text-muted-foreground">সাথী ব্যবস্থাপনা সিস্টেম</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -95,10 +247,11 @@ export default function TopNavigation({
           <Button
             variant="ghost"
             size="icon"
-            onClick={toggleTheme}
+            onClick={cycleTheme}
             data-testid="button-theme-toggle"
+            title={`থিম: ${themeMode === "light" ? "লাইট" : themeMode === "dark" ? "ডার্ক" : themeMode === "schedule" ? "সিডিউল" : "সিস্টেম"}`}
           >
-            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            {getThemeIcon()}
           </Button>
 
           <DropdownMenu>
