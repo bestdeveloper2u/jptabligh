@@ -6,6 +6,19 @@ A full-stack web application for managing Tabligh (Islamic missionary) activitie
 
 ## Recent Changes (December 2025)
 
+### Five Tasks (পাঁচ কাজ) Feature for Mosques
+- Added complete tracking for the five daily tablig tasks at mosque level:
+  1. **দৈনিক মাশওয়ারা** (Daily Mashwara) - with time field
+  2. **দৈনিক তালিম** (Daily Talim) - with time field  
+  3. **দৈনিক দাওয়াত** (Daily Dawah) - with time field
+  4. **সাপ্তাহিক গাশত** (Weekly Gasht) - with day field
+  5. **মাসিক ৩ দিন** (Monthly 3-Day Commitment) - with schedule field
+- Database schema extended with boolean flags for each task plus timing text fields
+- Master toggle "পাঁচ কাজ চালু আছে" controls visibility of individual task fields
+- Add/Edit mosque forms include checkboxes for each task with timing inputs
+- MosqueCard displays five tasks status with visual badges and active task count
+- Boolean coercion (!! operator) ensures proper save of unchecked boxes
+
 ### Enhanced Edit Functionality with Halqa Assignment
 - Added edit buttons to all detail pages (member, mosque, halqa)
 - Halqa selection dropdown available in member and mosque edit forms
