@@ -3416,7 +3416,20 @@ function EditMosqueForm({
                 <Checkbox checked={weeklyGasht} onCheckedChange={(c) => setWeeklyGasht(!!c)} id="edit-gasht" />
                 <Label htmlFor="edit-gasht" className="cursor-pointer">সাপ্তাহিক গাশত</Label>
               </div>
-              <Input placeholder="দিন ও সময় (যেমন: বৃহস্পতিবার মাগরিবের পর)" value={gashtDay} onChange={(e) => setGashtDay(e.target.value)} />
+              <Select value={gashtDay || ""} onValueChange={setGashtDay}>
+                <SelectTrigger data-testid="select-edit-gasht-day">
+                  <SelectValue placeholder="দিন নির্বাচন করুন" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="saturday">শনিবার</SelectItem>
+                  <SelectItem value="sunday">রবিবার</SelectItem>
+                  <SelectItem value="monday">সোমবার</SelectItem>
+                  <SelectItem value="tuesday">মঙ্গলবার</SelectItem>
+                  <SelectItem value="wednesday">বুধবার</SelectItem>
+                  <SelectItem value="thursday">বৃহস্পতিবার</SelectItem>
+                  <SelectItem value="friday">শুক্রবার</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid md:grid-cols-2 gap-3 items-center">
