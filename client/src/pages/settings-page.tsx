@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
-  ArrowLeft, 
   Moon, 
   Sun, 
   Monitor, 
@@ -34,6 +33,7 @@ import {
   CircleDot
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import DashboardLayout from "@/components/DashboardLayout";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -113,8 +113,13 @@ const DAYS_OF_WEEK = [
 
 export default function SettingsPage() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
+  
+  const handleViewChange = (view: string) => {
+    if (view === "settings") return;
+    setLocation(`/dashboard?view=${view}`);
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvMemberInputRef = useRef<HTMLInputElement>(null);
   const csvMosqueInputRef = useRef<HTMLInputElement>(null);
@@ -130,8 +135,8 @@ export default function SettingsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [weeklyDay, setWeeklyDay] = useState("thursday");
-  const [weeklyHamarahDay, setWeeklyHamarahDay] = useState("saturday");
+  const [sabgujariDay, setSabgujariDay] = useState("thursday");
+  const [mashwaraDay, setMashwaraDay] = useState("monday");
 
   const canManageSettings = user?.role === "super_admin";
 
@@ -189,8 +194,8 @@ export default function SettingsPage() {
       if (settings.logoType) setLogoType(settings.logoType as LogoType);
       if (settings.darkModeStart) setDarkModeStart(settings.darkModeStart);
       if (settings.darkModeEnd) setDarkModeEnd(settings.darkModeEnd);
-      if (settings.weeklyDay) setWeeklyDay(settings.weeklyDay);
-      if (settings.weeklyHamarahDay) setWeeklyHamarahDay(settings.weeklyHamarahDay);
+      if (settings.sabgujariDay) setSabgujariDay(settings.sabgujariDay);
+      if (settings.mashwaraDay) setMashwaraDay(settings.mashwaraDay);
     }
   }, [settingsData]);
 
@@ -325,8 +330,8 @@ export default function SettingsPage() {
       { key: "logoType", value: logoType },
       { key: "darkModeStart", value: darkModeStart },
       { key: "darkModeEnd", value: darkModeEnd },
-      { key: "weeklyDay", value: weeklyDay },
-      { key: "weeklyHamarahDay", value: weeklyHamarahDay },
+      { key: "sabgujariDay", value: sabgujariDay },
+      { key: "mashwaraDay", value: mashwaraDay },
     ];
     saveSettingsMutation.mutate(settings);
   };
@@ -550,7 +555,14 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <DashboardLayout
+        userName={user?.name || ""}
+        userId={user?.id || ""}
+        userRole={user?.role as "super_admin" | "manager" | "member" || "member"}
+        activeView="settings"
+        onViewChange={handleViewChange}
+        onLogout={logout}
+      >
         <div className="max-w-4xl mx-auto">
           <Skeleton className="h-8 w-32 mb-6" />
           <div className="space-y-4">
@@ -559,23 +571,20 @@ export default function SettingsPage() {
             <Skeleton className="h-32 w-full" />
           </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto p-6">
-        <Button
-          variant="ghost"
-          onClick={() => setLocation("/dashboard")}
-          className="mb-6 gap-2"
-          data-testid="button-back"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          ড্যাশবোর্ডে ফিরে যান
-        </Button>
-
+    <DashboardLayout
+      userName={user?.name || ""}
+      userId={user?.id || ""}
+      userRole={user?.role as "super_admin" | "manager" | "member" || "member"}
+      activeView="settings"
+      onViewChange={handleViewChange}
+      onLogout={logout}
+    >
+      <div className="max-w-4xl mx-auto">
         <div className="space-y-6">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -1100,16 +1109,16 @@ export default function SettingsPage() {
                     </div>
                     <div className="text-left">
                       <h3 className="font-semibold">সাপ্তাহিক সিডিউল সেটিংস</h3>
-                      <p className="text-sm text-muted-foreground">সাপ্তাহিক এবং হামারাহের দিন নির্ধারণ করুন</p>
+                      <p className="text-sm text-muted-foreground">সবগুজারি এবং মাসোয়ারার দিন নির্ধারণ করুন</p>
                     </div>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="px-4 pb-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                     <div className="space-y-2">
-                      <Label>সাপ্তাহিক দিন</Label>
-                      <Select value={weeklyDay} onValueChange={setWeeklyDay}>
-                        <SelectTrigger data-testid="select-weekly-day">
+                      <Label>সবগুজারির দিন</Label>
+                      <Select value={sabgujariDay} onValueChange={setSabgujariDay}>
+                        <SelectTrigger data-testid="select-sabgujari-day">
                           <SelectValue placeholder="দিন নির্বাচন করুন" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1122,9 +1131,9 @@ export default function SettingsPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>সাপ্তাহিক হামারাহের দিন</Label>
-                      <Select value={weeklyHamarahDay} onValueChange={setWeeklyHamarahDay}>
-                        <SelectTrigger data-testid="select-hamarah-day">
+                      <Label>সাপ্তাহিক মাসোয়ারার দিন</Label>
+                      <Select value={mashwaraDay} onValueChange={setMashwaraDay}>
+                        <SelectTrigger data-testid="select-mashwara-day">
                           <SelectValue placeholder="দিন নির্বাচন করুন" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1449,6 +1458,6 @@ export default function SettingsPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

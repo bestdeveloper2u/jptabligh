@@ -100,11 +100,27 @@ const managerFormSchema = z.object({
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  
   const [activeView, setActiveView] = useState("dashboard");
   const [search, setSearch] = useState("");
   const [thana, setThana] = useState("all");
   const [union, setUnion] = useState("all");
+
+  // Update active view when URL changes (handles navigation from Settings page)
+  useEffect(() => {
+    // Parse view from location path if it contains query params
+    if (location.includes("?")) {
+      const searchParams = location.split("?")[1];
+      const params = new URLSearchParams(searchParams);
+      const viewParam = params.get("view");
+      if (viewParam && ["dashboard", "mosques", "halqa", "members", "managers"].includes(viewParam)) {
+        setActiveView(viewParam);
+        // Navigate to clean URL using wouter to keep router state in sync
+        setLocation("/dashboard", { replace: true });
+      }
+    }
+  }, [location, setLocation]);
 
   // Reset filters when view changes
   useEffect(() => {
