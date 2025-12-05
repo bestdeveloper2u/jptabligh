@@ -25,7 +25,13 @@ import {
   HardDrive,
   Users,
   Building2,
-  MapPin
+  MapPin,
+  User,
+  Phone,
+  Mail,
+  FileText,
+  Calendar,
+  CircleDot
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -39,6 +45,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +69,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import type { Thana, Union, Mosque, Halqa, Takaja } from "@shared/schema";
 
 type ThemeMode = "light" | "dark" | "system" | "schedule";
 type LogoType = "logo" | "text" | "both";
@@ -87,11 +101,24 @@ const APP_VERSION = "1.0.0";
 const APP_NAME = "জামালপুর তাবলীগ";
 const BUILD_DATE = "ডিসেম্বর ২০২৪";
 
+const DAYS_OF_WEEK = [
+  { value: "sunday", label: "রবিবার" },
+  { value: "monday", label: "সোমবার" },
+  { value: "tuesday", label: "মঙ্গলবার" },
+  { value: "wednesday", label: "বুধবার" },
+  { value: "thursday", label: "বৃহস্পতিবার" },
+  { value: "friday", label: "শুক্রবার" },
+  { value: "saturday", label: "শনিবার" },
+];
+
 export default function SettingsPage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const csvMemberInputRef = useRef<HTMLInputElement>(null);
+  const csvMosqueInputRef = useRef<HTMLInputElement>(null);
+  const csvHalqaInputRef = useRef<HTMLInputElement>(null);
   
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
   const [siteTitle, setSiteTitle] = useState("জামালপুর তাবলীগ");
@@ -103,6 +130,8 @@ export default function SettingsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [weeklyDay, setWeeklyDay] = useState("thursday");
+  const [weeklyHamarahDay, setWeeklyHamarahDay] = useState("saturday");
 
   const canManageSettings = user?.role === "super_admin";
 
@@ -110,26 +139,42 @@ export default function SettingsPage() {
     queryKey: ["/api/settings"],
   });
 
-  // Stats queries for export info
-  const { data: usersData } = useQuery<{ users: unknown[] }>({
+  // Data queries
+  const { data: usersResponse } = useQuery<{ users: unknown[] }>({
     queryKey: ["/api/users"],
-    enabled: canManageSettings,
   });
 
-  const { data: thanasData } = useQuery<unknown[]>({
+  const { data: thanasResponse } = useQuery<{ thanas: Thana[] }>({
     queryKey: ["/api/thanas"],
-    enabled: canManageSettings,
   });
 
-  const { data: mosquesData } = useQuery<unknown[]>({
+  const { data: unionsResponse } = useQuery<{ unions: Union[] }>({
+    queryKey: ["/api/unions"],
+  });
+
+  const { data: mosquesResponse } = useQuery<{ mosques: Mosque[] }>({
     queryKey: ["/api/mosques"],
+  });
+
+  const { data: halqasResponse } = useQuery<{ halqas: Halqa[] }>({
+    queryKey: ["/api/halqas"],
+  });
+
+  const { data: takajasResponse } = useQuery<{ takajas: Takaja[] }>({
+    queryKey: ["/api/takajas"],
     enabled: canManageSettings,
   });
 
-  const { data: halqasData } = useQuery<unknown[]>({
-    queryKey: ["/api/halqas"],
-    enabled: canManageSettings,
-  });
+  // Extract data from responses
+  const usersData = usersResponse?.users || [];
+  const thanasData = thanasResponse?.thanas || [];
+  const unionsData = unionsResponse?.unions || [];
+  const mosquesData = mosquesResponse?.mosques || [];
+  const halqasData = halqasResponse?.halqas || [];
+  const takajasData = takajasResponse?.takajas || [];
+
+  // Count active takajas
+  const activeTakajas = takajasData.filter(t => t.status !== "completed")?.length || 0;
 
   useEffect(() => {
     if (settingsData?.settings) {
@@ -144,6 +189,8 @@ export default function SettingsPage() {
       if (settings.logoType) setLogoType(settings.logoType as LogoType);
       if (settings.darkModeStart) setDarkModeStart(settings.darkModeStart);
       if (settings.darkModeEnd) setDarkModeEnd(settings.darkModeEnd);
+      if (settings.weeklyDay) setWeeklyDay(settings.weeklyDay);
+      if (settings.weeklyHamarahDay) setWeeklyHamarahDay(settings.weeklyHamarahDay);
     }
   }, [settingsData]);
 
@@ -278,11 +325,13 @@ export default function SettingsPage() {
       { key: "logoType", value: logoType },
       { key: "darkModeStart", value: darkModeStart },
       { key: "darkModeEnd", value: darkModeEnd },
+      { key: "weeklyDay", value: weeklyDay },
+      { key: "weeklyHamarahDay", value: weeklyHamarahDay },
     ];
     saveSettingsMutation.mutate(settings);
   };
 
-  // Export all data
+  // Export all data (JSON)
   const handleExportData = async () => {
     setIsExporting(true);
     try {
@@ -320,7 +369,7 @@ export default function SettingsPage() {
     }
   };
 
-  // Import data
+  // Import data (JSON)
   const handleImportData = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -330,14 +379,12 @@ export default function SettingsPage() {
       const text = await file.text();
       const importData: ExportData = JSON.parse(text);
 
-      // Validate the import data
       if (!importData.version || !importData.data) {
         throw new Error("অবৈধ ব্যাকআপ ফাইল");
       }
 
       await apiRequest("POST", "/api/import", importData.data);
 
-      // Invalidate all queries to refresh data
       queryClient.invalidateQueries();
 
       toast({
@@ -358,6 +405,126 @@ export default function SettingsPage() {
     }
   };
 
+  // CSV Export functions
+  const handleExportMembersCSV = async () => {
+    try {
+      const response = await apiRequest("GET", "/api/users");
+      const data = await response.json();
+      const users = data.users || [];
+      
+      const headers = ["নাম", "ফোন", "ইমেইল", "থানা", "ইউনিয়ন", "তাবলীগ কার্যক্রম"];
+      const csvContent = [
+        headers.join(","),
+        ...users.map((u: any) => [
+          u.name || "",
+          u.phone || "",
+          u.email || "",
+          thanasData?.find(t => t.id === u.thanaId)?.nameBn || "",
+          unionsData?.find(un => un.id === u.unionId)?.nameBn || "",
+          (u.tabligActivities || []).join("; ")
+        ].map(v => `"${v}"`).join(","))
+      ].join("\n");
+      
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sathi-list-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({ title: "সফল হয়েছে", description: "সাথী তালিকা ডাউনলোড হয়েছে" });
+    } catch (error) {
+      toast({ variant: "destructive", title: "ব্যর্থ", description: "এক্সপোর্ট করতে সমস্যা হয়েছে" });
+    }
+  };
+
+  const handleExportMosquesCSV = async () => {
+    try {
+      const csvContent = [
+        ["মসজিদের নাম", "ঠিকানা", "ইমামের ফোন", "মুয়াজ্জিনের ফোন", "থানা", "ইউনিয়ন"].join(","),
+        ...(mosquesData || []).map(m => [
+          m.name || "",
+          m.address || "",
+          m.imamPhone || "",
+          m.muazzinPhone || "",
+          thanasData?.find(t => t.id === m.thanaId)?.nameBn || "",
+          unionsData?.find(un => un.id === m.unionId)?.nameBn || ""
+        ].map(v => `"${v}"`).join(","))
+      ].join("\n");
+      
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mosque-list-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({ title: "সফল হয়েছে", description: "মসজিদের তালিকা ডাউনলোড হয়েছে" });
+    } catch (error) {
+      toast({ variant: "destructive", title: "ব্যর্থ", description: "এক্সপোর্ট করতে সমস্যা হয়েছে" });
+    }
+  };
+
+  const handleExportHalqasCSV = async () => {
+    try {
+      const csvContent = [
+        ["হালকার নাম", "থানা", "ইউনিয়ন"].join(","),
+        ...(halqasData || []).map(h => [
+          h.name || "",
+          thanasData?.find(t => t.id === h.thanaId)?.nameBn || "",
+          unionsData?.find(un => un.id === h.unionId)?.nameBn || ""
+        ].map(v => `"${v}"`).join(","))
+      ].join("\n");
+      
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `halqa-list-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({ title: "সফল হয়েছে", description: "হালকার তালিকা ডাউনলোড হয়েছে" });
+    } catch (error) {
+      toast({ variant: "destructive", title: "ব্যর্থ", description: "এক্সপোর্ট করতে সমস্যা হয়েছে" });
+    }
+  };
+
+  // CSV Import functions
+  const handleCSVImport = async (file: File, type: "members" | "mosques" | "halqas") => {
+    try {
+      const text = await file.text();
+      const lines = text.split("\n").filter(l => l.trim());
+      if (lines.length < 2) {
+        throw new Error("ফাইলে কোনো ডেটা নেই");
+      }
+      
+      const data = lines.slice(1).map(line => {
+        const values = line.split(",").map(v => v.replace(/^"|"$/g, "").trim());
+        return values;
+      });
+
+      await apiRequest("POST", `/api/import-csv/${type}`, { data });
+      
+      queryClient.invalidateQueries();
+      toast({ title: "সফল হয়েছে", description: "ডেটা ইমপোর্ট সম্পন্ন হয়েছে" });
+    } catch (error) {
+      toast({ 
+        variant: "destructive", 
+        title: "ব্যর্থ", 
+        description: error instanceof Error ? error.message : "ইমপোর্ট করতে সমস্যা হয়েছে" 
+      });
+    }
+  };
+
   // Clear cache
   const handleClearCache = () => {
     queryClient.clear();
@@ -367,6 +534,16 @@ export default function SettingsPage() {
     });
   };
 
+  // Get role label
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case "super_admin": return "সুপার এডমিন";
+      case "manager": return "ম্যানেজার";
+      case "member": return "সাথী";
+      default: return role;
+    }
+  };
+
   if (!user) {
     return null;
   }
@@ -374,7 +551,7 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background p-6">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <Skeleton className="h-8 w-32 mb-6" />
           <div className="space-y-4">
             <Skeleton className="h-64 w-full" />
@@ -388,7 +565,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-3xl mx-auto p-6">
+      <div className="max-w-4xl mx-auto p-6">
         <Button
           variant="ghost"
           onClick={() => setLocation("/dashboard")}
@@ -405,10 +582,96 @@ export default function SettingsPage() {
               <Settings className="w-7 h-7" />
               সেটিংস
             </h1>
-            <p className="text-muted-foreground">অ্যাপ্লিকেশন সেটিংস ও কনফিগারেশন</p>
+            <p className="text-muted-foreground">আপনার প্রোফাইল এবং অ্যাকাউন্ট সেটিংস</p>
           </div>
 
-          <Accordion type="multiple" defaultValue={["theme", "site", "data", "about"]} className="space-y-4">
+          {/* Personal Information Card */}
+          <Card data-testid="card-personal-info">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <User className="w-5 h-5" />
+                ব্যক্তিগত তথ্য
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">নাম</p>
+                  <p className="font-medium" data-testid="text-user-name">{user.name}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Phone className="w-3 h-3" /> মোবাইল নাম্বার
+                  </p>
+                  <p className="font-medium" data-testid="text-user-phone">{user.phone}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Mail className="w-3 h-3" /> ইমেইল
+                  </p>
+                  <p className="font-medium" data-testid="text-user-email">{user.email || "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">ভূমিকা</p>
+                  <Badge variant="secondary" data-testid="badge-user-role">
+                    {getRoleLabel(user.role)}
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Thana & Union Management - Super Admin Only */}
+          {canManageSettings && (
+            <Card data-testid="card-thana-union">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <MapPin className="w-5 h-5" />
+                  থানা ও ইউনিয়ন ব্যবস্থাপনা
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 rounded-lg bg-muted/50 text-center">
+                    <p className="text-sm text-muted-foreground">মোট থানা</p>
+                    <p className="text-3xl font-bold text-primary" data-testid="text-thana-count">
+                      {thanasData.length || 0}
+                    </p>
+                    <p className="text-xs text-muted-foreground">জামালপুর জেলার সকল থানা</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted/50 text-center">
+                    <p className="text-sm text-muted-foreground">মোট ইউনিয়ন</p>
+                    <p className="text-3xl font-bold text-primary" data-testid="text-union-count">
+                      {unionsData.length || 0}
+                    </p>
+                    <p className="text-xs text-muted-foreground">সকল থানার অধীন ইউনিয়ন</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium mb-3">থানা অনুযায়ী তালিকা</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {thanasData.map(thana => {
+                      const unionCount = unionsData.filter(u => u.thanaId === thana.id).length || 0;
+                      return (
+                        <div 
+                          key={thana.id} 
+                          className="p-3 rounded-lg bg-muted/30 hover-elevate"
+                          data-testid={`thana-item-${thana.id}`}
+                        >
+                          <p className="font-medium text-sm">{thana.nameBn}</p>
+                          <p className="text-xs text-muted-foreground">{unionCount} ইউনিয়ন</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Accordion Settings */}
+          <Accordion type="multiple" defaultValue={["theme"]} className="space-y-4">
             {/* Theme Settings */}
             <AccordionItem value="theme" className="border rounded-lg px-1">
               <AccordionTrigger className="px-4 hover:no-underline" data-testid="accordion-theme">
@@ -430,11 +693,7 @@ export default function SettingsPage() {
                     className="grid grid-cols-2 sm:grid-cols-4 gap-4"
                   >
                     <div>
-                      <RadioGroupItem
-                        value="light"
-                        id="light"
-                        className="peer sr-only"
-                      />
+                      <RadioGroupItem value="light" id="light" className="peer sr-only" />
                       <Label
                         htmlFor="light"
                         className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -445,11 +704,7 @@ export default function SettingsPage() {
                       </Label>
                     </div>
                     <div>
-                      <RadioGroupItem
-                        value="dark"
-                        id="dark"
-                        className="peer sr-only"
-                      />
+                      <RadioGroupItem value="dark" id="dark" className="peer sr-only" />
                       <Label
                         htmlFor="dark"
                         className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -460,11 +715,7 @@ export default function SettingsPage() {
                       </Label>
                     </div>
                     <div>
-                      <RadioGroupItem
-                        value="system"
-                        id="system"
-                        className="peer sr-only"
-                      />
+                      <RadioGroupItem value="system" id="system" className="peer sr-only" />
                       <Label
                         htmlFor="system"
                         className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -475,11 +726,7 @@ export default function SettingsPage() {
                       </Label>
                     </div>
                     <div>
-                      <RadioGroupItem
-                        value="schedule"
-                        id="schedule"
-                        className="peer sr-only"
-                      />
+                      <RadioGroupItem value="schedule" id="schedule" className="peer sr-only" />
                       <Label
                         htmlFor="schedule"
                         className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -524,9 +771,6 @@ export default function SettingsPage() {
                           />
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        উদাহরণ: সন্ধ্যা ৬টা থেকে সকাল ৬টা পর্যন্ত ডার্ক মোড থাকবে
-                      </p>
                     </div>
                   )}
                 </div>
@@ -549,7 +793,6 @@ export default function SettingsPage() {
                 </AccordionTrigger>
                 <AccordionContent className="px-4 pb-4">
                   <div className="space-y-6 pt-2">
-                    {/* Logo Type Selection */}
                     <div className="space-y-4">
                       <Label className="text-sm font-medium">হেডারে কি দেখাবে?</Label>
                       <RadioGroup
@@ -558,11 +801,7 @@ export default function SettingsPage() {
                         className="grid grid-cols-3 gap-4"
                       >
                         <div>
-                          <RadioGroupItem
-                            value="text"
-                            id="logoType-text"
-                            className="peer sr-only"
-                          />
+                          <RadioGroupItem value="text" id="logoType-text" className="peer sr-only" />
                           <Label
                             htmlFor="logoType-text"
                             className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -573,11 +812,7 @@ export default function SettingsPage() {
                           </Label>
                         </div>
                         <div>
-                          <RadioGroupItem
-                            value="logo"
-                            id="logoType-logo"
-                            className="peer sr-only"
-                          />
+                          <RadioGroupItem value="logo" id="logoType-logo" className="peer sr-only" />
                           <Label
                             htmlFor="logoType-logo"
                             className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -588,11 +823,7 @@ export default function SettingsPage() {
                           </Label>
                         </div>
                         <div>
-                          <RadioGroupItem
-                            value="both"
-                            id="logoType-both"
-                            className="peer sr-only"
-                          />
+                          <RadioGroupItem value="both" id="logoType-both" className="peer sr-only" />
                           <Label
                             htmlFor="logoType-both"
                             className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover-elevate cursor-pointer peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -610,7 +841,6 @@ export default function SettingsPage() {
 
                     <Separator />
 
-                    {/* Site Title - Show if text or both selected */}
                     {(logoType === "text" || logoType === "both") && (
                       <div className="space-y-2">
                         <Label htmlFor="siteTitle" className="flex items-center gap-2">
@@ -627,7 +857,6 @@ export default function SettingsPage() {
                       </div>
                     )}
 
-                    {/* Logo Upload - Show if logo or both selected */}
                     {(logoType === "logo" || logoType === "both") && (
                       <>
                         {logoType === "both" && <Separator />}
@@ -683,16 +912,11 @@ export default function SettingsPage() {
 
                     <Separator />
 
-                    {/* Preview */}
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">প্রিভিউ</Label>
                       <div className="p-4 rounded-lg border bg-muted/30 flex items-center gap-3">
                         {(logoType === "logo" || logoType === "both") && logoPreview && (
-                          <img 
-                            src={logoPreview} 
-                            alt="Logo" 
-                            className="w-10 h-10 object-contain"
-                          />
+                          <img src={logoPreview} alt="Logo" className="w-10 h-10 object-contain" />
                         )}
                         {(logoType === "text" || logoType === "both") && (
                           <span className="text-lg font-bold">{siteTitle || "সাইটের নাম"}</span>
@@ -718,7 +942,217 @@ export default function SettingsPage() {
               </AccordionItem>
             )}
 
-            {/* Data Management - Only for Super Admin */}
+            {/* CSV Export - Super Admin Only */}
+            {canManageSettings && (
+              <AccordionItem value="csv-export" className="border rounded-lg px-1">
+                <AccordionTrigger className="px-4 hover:no-underline" data-testid="accordion-csv-export">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-green-500/10">
+                      <Download className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-semibold">ডেটা এক্সপোর্ট</h3>
+                      <p className="text-sm text-muted-foreground">CSV ফরম্যাটে ডেটা ডাউনলোড করুন</p>
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4">
+                  <div className="space-y-4 pt-2">
+                    <div className="flex flex-wrap gap-3">
+                      <Button variant="outline" onClick={handleExportMembersCSV} data-testid="button-export-members-csv">
+                        <Download className="w-4 h-4 mr-2" />
+                        সাথীদের তালিকা ডাউনলোড
+                      </Button>
+                      <Button variant="outline" onClick={handleExportMosquesCSV} data-testid="button-export-mosques-csv">
+                        <Download className="w-4 h-4 mr-2" />
+                        মসজিদের তালিকা ডাউনলোড
+                      </Button>
+                      <Button variant="outline" onClick={handleExportHalqasCSV} data-testid="button-export-halqas-csv">
+                        <Download className="w-4 h-4 mr-2" />
+                        হালকার তালিকা ডাউনলোড
+                      </Button>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+
+            {/* CSV Import - Super Admin Only */}
+            {canManageSettings && (
+              <AccordionItem value="csv-import" className="border rounded-lg px-1">
+                <AccordionTrigger className="px-4 hover:no-underline" data-testid="accordion-csv-import">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-blue-500/10">
+                      <FileUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-semibold">ডেটা ইমপোর্ট</h3>
+                      <p className="text-sm text-muted-foreground">CSV ফাইল থেকে ডেটা আপলোড করুন</p>
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                    {/* Member Import */}
+                    <Card className="border">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">সাথী ইমপোর্ট</CardTitle>
+                        <CardDescription className="text-xs">
+                          CSV ফরম্যাট: নাম, মোবাইল, ইমেইল, থানা, ইউনিয়ন
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <Input
+                          ref={csvMemberInputRef}
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleCSVImport(file, "members");
+                          }}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => csvMemberInputRef.current?.click()}
+                          data-testid="button-import-members-csv"
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          সাথী আপলোড
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    {/* Mosque Import */}
+                    <Card className="border">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">মসজিদ ইমপোর্ট</CardTitle>
+                        <CardDescription className="text-xs">
+                          CSV ফরম্যাট: নাম, ঠিকানা, ইমামের ফোন, মুয়াজ্জিনের ফোন, থানা, ইউনিয়ন
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <Input
+                          ref={csvMosqueInputRef}
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleCSVImport(file, "mosques");
+                          }}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => csvMosqueInputRef.current?.click()}
+                          data-testid="button-import-mosques-csv"
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          মসজিদ আপলোড
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    {/* Halqa Import */}
+                    <Card className="border">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">হালকা ইমপোর্ট</CardTitle>
+                        <CardDescription className="text-xs">
+                          CSV ফরম্যাট: নাম, থানা, ইউনিয়ন
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <Input
+                          ref={csvHalqaInputRef}
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleCSVImport(file, "halqas");
+                          }}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => csvHalqaInputRef.current?.click()}
+                          data-testid="button-import-halqas-csv"
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          হালকা আপলোড
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+
+            {/* Weekly Schedule Settings - Super Admin Only */}
+            {canManageSettings && (
+              <AccordionItem value="schedule" className="border rounded-lg px-1">
+                <AccordionTrigger className="px-4 hover:no-underline" data-testid="accordion-schedule">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <Calendar className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-semibold">সাপ্তাহিক সিডিউল সেটিংস</h3>
+                      <p className="text-sm text-muted-foreground">সাপ্তাহিক এবং হামারাহের দিন নির্ধারণ করুন</p>
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-2">
+                      <Label>সাপ্তাহিক দিন</Label>
+                      <Select value={weeklyDay} onValueChange={setWeeklyDay}>
+                        <SelectTrigger data-testid="select-weekly-day">
+                          <SelectValue placeholder="দিন নির্বাচন করুন" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DAYS_OF_WEEK.map(day => (
+                            <SelectItem key={day.value} value={day.value}>
+                              {day.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>সাপ্তাহিক হামারাহের দিন</Label>
+                      <Select value={weeklyHamarahDay} onValueChange={setWeeklyHamarahDay}>
+                        <SelectTrigger data-testid="select-hamarah-day">
+                          <SelectValue placeholder="দিন নির্বাচন করুন" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DAYS_OF_WEEK.map(day => (
+                            <SelectItem key={day.value} value={day.value}>
+                              {day.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex justify-end mt-4">
+                    <Button
+                      onClick={handleSaveSettings}
+                      disabled={saveSettingsMutation.isPending}
+                      size="sm"
+                      data-testid="button-save-schedule"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      সংরক্ষণ করুন
+                    </Button>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+
+            {/* Data Management (JSON Backup) - Only for Super Admin */}
             {canManageSettings && (
               <AccordionItem value="data" className="border rounded-lg px-1">
                 <AccordionTrigger className="px-4 hover:no-underline" data-testid="accordion-data">
@@ -734,48 +1168,22 @@ export default function SettingsPage() {
                 </AccordionTrigger>
                 <AccordionContent className="px-4 pb-4">
                   <div className="space-y-6 pt-2">
-                    {/* Data Stats */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="p-3 rounded-lg bg-muted/50 text-center">
-                        <Users className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
-                        <p className="text-2xl font-bold">{usersData?.users?.length || 0}</p>
-                        <p className="text-xs text-muted-foreground">সদস্য</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-muted/50 text-center">
-                        <MapPin className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
-                        <p className="text-2xl font-bold">{(thanasData as unknown[])?.length || 0}</p>
-                        <p className="text-xs text-muted-foreground">থানা</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-muted/50 text-center">
-                        <Building2 className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
-                        <p className="text-2xl font-bold">{(mosquesData as unknown[])?.length || 0}</p>
-                        <p className="text-xs text-muted-foreground">মসজিদ</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-muted/50 text-center">
-                        <HardDrive className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
-                        <p className="text-2xl font-bold">{(halqasData as unknown[])?.length || 0}</p>
-                        <p className="text-xs text-muted-foreground">হালকা</p>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    {/* Export */}
+                    {/* Export JSON */}
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="p-2 rounded-lg bg-green-500/10">
                           <Download className="w-5 h-5 text-green-600 dark:text-green-400" />
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-medium">ডেটা এক্সপোর্ট</h4>
+                          <h4 className="font-medium">JSON ব্যাকআপ</h4>
                           <p className="text-sm text-muted-foreground mb-3">
-                            সমস্ত ডেটা JSON ফাইল হিসেবে ডাউনলোড করুন। এই ফাইল ব্যাকআপ হিসেবে সংরক্ষণ করতে পারবেন।
+                            সমস্ত ডেটা JSON ফাইল হিসেবে ডাউনলোড করুন।
                           </p>
                           <Button
                             variant="outline"
                             onClick={handleExportData}
                             disabled={isExporting}
-                            data-testid="button-export"
+                            data-testid="button-export-json"
                           >
                             {isExporting ? (
                               <>
@@ -785,7 +1193,7 @@ export default function SettingsPage() {
                             ) : (
                               <>
                                 <Download className="w-4 h-4 mr-2" />
-                                এক্সপোর্ট করুন
+                                JSON এক্সপোর্ট
                               </>
                             )}
                           </Button>
@@ -795,14 +1203,14 @@ export default function SettingsPage() {
 
                     <Separator />
 
-                    {/* Import */}
+                    {/* Import JSON */}
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="p-2 rounded-lg bg-blue-500/10">
                           <FileUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-medium">ডেটা ইমপোর্ট</h4>
+                          <h4 className="font-medium">JSON রিস্টোর</h4>
                           <p className="text-sm text-muted-foreground mb-3">
                             পূর্বে এক্সপোর্ট করা ব্যাকআপ ফাইল থেকে ডেটা পুনরুদ্ধার করুন।
                           </p>
@@ -814,11 +1222,11 @@ export default function SettingsPage() {
                               onChange={handleImportData}
                               className="hidden"
                               id="import-file"
-                              data-testid="input-import"
+                              data-testid="input-import-json"
                             />
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="outline" disabled={isImporting} data-testid="button-import">
+                                <Button variant="outline" disabled={isImporting} data-testid="button-import-json">
                                   {isImporting ? (
                                     <>
                                       <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
@@ -827,7 +1235,7 @@ export default function SettingsPage() {
                                   ) : (
                                     <>
                                       <FileUp className="w-4 h-4 mr-2" />
-                                      ইমপোর্ট করুন
+                                      JSON ইমপোর্ট
                                     </>
                                   )}
                                 </Button>
@@ -845,9 +1253,7 @@ export default function SettingsPage() {
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>বাতিল</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => fileInputRef.current?.click()}
-                                  >
+                                  <AlertDialogAction onClick={() => fileInputRef.current?.click()}>
                                     হ্যাঁ, ইমপোর্ট করুন
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
@@ -869,7 +1275,7 @@ export default function SettingsPage() {
                         <div className="flex-1">
                           <h4 className="font-medium">ক্যাশ পরিষ্কার</h4>
                           <p className="text-sm text-muted-foreground mb-3">
-                            অ্যাপ্লিকেশনের সাময়িক ডেটা পরিষ্কার করুন। সমস্যা হলে এটি সাহায্য করতে পারে।
+                            অ্যাপ্লিকেশনের সাময়িক ডেটা পরিষ্কার করুন।
                           </p>
                           <Button
                             variant="outline"
@@ -954,59 +1360,93 @@ export default function SettingsPage() {
                 </AccordionContent>
               </AccordionItem>
             )}
-
-            {/* About Section */}
-            <AccordionItem value="about" className="border rounded-lg px-1">
-              <AccordionTrigger className="px-4 hover:no-underline" data-testid="accordion-about">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Info className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="font-semibold">সফটওয়্যার তথ্য</h3>
-                    <p className="text-sm text-muted-foreground">ভার্শন ও ডেভেলপার তথ্য</p>
-                  </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pb-4">
-                <div className="space-y-4 pt-2">
-                  <div className="p-4 rounded-lg bg-muted/50 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">অ্যাপ্লিকেশন</span>
-                      <span className="font-medium">{APP_NAME}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">ভার্শন</span>
-                      <Badge variant="secondary" className="font-mono">v{APP_VERSION}</Badge>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">বিল্ড তারিখ</span>
-                      <span className="text-sm">{BUILD_DATE}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">প্ল্যাটফর্ম</span>
-                      <span className="text-sm">ওয়েব অ্যাপ্লিকেশন</span>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">ডেভেলপার</span>
-                      <span className="text-sm">জামালপুর তাবলীগ টিম</span>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4 rounded-lg border border-dashed">
-                    <p className="text-sm text-center text-muted-foreground">
-                      দাওয়াত ও তাবলীগের কাজে এই সফটওয়্যার ব্যবহার করুন। 
-                      আল্লাহ আমাদের সকলকে দ্বীনের খেদমত করার তৌফিক দান করুন।
-                    </p>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
           </Accordion>
+
+          {/* Brief Statistics Card */}
+          <Card data-testid="card-statistics">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <CircleDot className="w-5 h-5" />
+                সংক্ষিপ্ত পরিসংখ্যান
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-4 rounded-lg bg-blue-500/10 text-center">
+                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-400" data-testid="stat-members">
+                    {usersData.length || 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">মোট সাথী</p>
+                </div>
+                <div className="p-4 rounded-lg bg-green-500/10 text-center">
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-400" data-testid="stat-mosques">
+                    {mosquesData.length || 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">মোট মসজিদ</p>
+                </div>
+                <div className="p-4 rounded-lg bg-purple-500/10 text-center">
+                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400" data-testid="stat-halqas">
+                    {halqasData.length || 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">মোট হালকা</p>
+                </div>
+                <div className="p-4 rounded-lg bg-orange-500/10 text-center">
+                  <p className="text-3xl font-bold text-orange-600 dark:text-orange-400" data-testid="stat-takajas">
+                    {activeTakajas}
+                  </p>
+                  <p className="text-sm text-muted-foreground">এ মাসে তাকাজা</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* About Section Card */}
+          <Card data-testid="card-about">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Info className="w-5 h-5" />
+                অ্যাপ সম্পর্কে
+              </CardTitle>
+              <CardDescription>
+                জামালপুর জেলার তাবলীগ সাথী ব্যবস্থাপনা সিস্টেম
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 rounded-lg bg-muted/50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">অ্যাপ্লিকেশন</span>
+                  <span className="font-medium">{APP_NAME}</span>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">ভার্শন</span>
+                  <Badge variant="secondary" className="font-mono">v{APP_VERSION}</Badge>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">বিল্ড তারিখ</span>
+                  <span className="text-sm">{BUILD_DATE}</span>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">প্ল্যাটফর্ম</span>
+                  <span className="text-sm">ওয়েব অ্যাপ্লিকেশন</span>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">ডেভেলপার</span>
+                  <span className="text-sm">জামালপুর তাবলীগ টিম</span>
+                </div>
+              </div>
+              
+              <div className="p-4 rounded-lg border border-dashed">
+                <p className="text-sm text-center text-muted-foreground">
+                  দাওয়াত ও তাবলীগের কাজে এই সফটওয়্যার ব্যবহার করুন। 
+                  আল্লাহ আমাদের সকলকে দ্বীনের খেদমত করার তৌফিক দান করুন।
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
