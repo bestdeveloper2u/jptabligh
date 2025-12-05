@@ -36,6 +36,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Halqa, User as UserType, Takaja, Thana, Union, Mosque } from "@shared/schema";
+import MemberCard from "@/components/MemberCard";
 
 const takajaFormSchema = z.object({
   title: z.string().min(1, "শিরোনাম আবশ্যক"),
@@ -737,104 +738,32 @@ export default function HalqaDetailsPage() {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid md:grid-cols-2 gap-4">
                   {halqaMembers.map((member) => {
-                    const initials = member.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
                     const memberMosque = allMosques.find(m => m.id === member.mosqueId);
                     
                     return (
-                      <Card 
-                        key={member.id} 
-                        className="hover-elevate transition-all"
-                        data-testid={`sathi-card-${member.id}`}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-start gap-4 flex-1">
-                              <Avatar className="w-12 h-12">
-                                <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                                  {initials}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-lg truncate" data-testid={`sathi-name-${member.id}`}>
-                                  {member.name}
-                                </h3>
-                                <div className="flex flex-wrap gap-1.5 mt-1">
-                                  <Badge variant="secondary" className="text-xs">
-                                    {thanaName}
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs">
-                                    {unionName}
-                                  </Badge>
-                                </div>
-                              </div>
-                            </div>
-                            {isAdmin && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => {
-                                  if (confirm("আপনি কি নিশ্চিত যে এই সাথীকে হালকা থেকে সরাতে চান?")) {
-                                    removeMemberFromHalqaMutation.mutate(member.id);
-                                  }
-                                }}
-                                data-testid={`button-remove-member-${member.id}`}
-                              >
-                                <Trash2 className="w-4 h-4 text-muted-foreground" />
-                              </Button>
-                            )}
-                          </div>
-                          
-                          <div className="mt-4 space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Phone className="w-4 h-4 flex-shrink-0" />
-                              <span data-testid={`sathi-phone-${member.id}`}>{member.phone}</span>
-                            </div>
-                            {memberMosque && (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Building2 className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate" data-testid={`sathi-mosque-${member.id}`}>{memberMosque.name}</span>
-                              </div>
-                            )}
-                          </div>
-
-                          {member.tabligActivities && member.tabligActivities.length > 0 && (
-                            <div className="mt-3 pt-3 border-t">
-                              <p className="text-xs font-medium text-muted-foreground mb-2">তাবলীগ কার্যক্রম:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {member.tabligActivities.slice(0, 3).map((activity) => (
-                                  <Badge key={activity} variant="outline" className="text-xs">
-                                    {activity === "tin-chilla" && "৩ চিল্লা"}
-                                    {activity === "ek-chilla" && "১ চিল্লা"}
-                                    {activity === "bidesh-sofor" && "বিদেশ সফর"}
-                                    {activity === "tin-din" && "৩ দিন"}
-                                    {activity === "sat-din" && "৭ দিন"}
-                                    {activity === "dos-din" && "১০ দিন"}
-                                  </Badge>
-                                ))}
-                                {member.tabligActivities.length > 3 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    +{member.tabligActivities.length - 3}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="mt-3 pt-3 border-t">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="w-full"
-                              onClick={() => setLocation(`/member/${member.id}`)}
-                              data-testid={`button-view-member-${member.id}`}
-                            >
-                              বিস্তারিত দেখুন
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <MemberCard
+                        key={member.id}
+                        id={member.id}
+                        name={member.name}
+                        phone={member.phone}
+                        thana={thanaName}
+                        union={unionName}
+                        mosque={memberMosque?.name || ""}
+                        activities={member.tabligActivities || []}
+                        onView={() => setLocation(`/member/${member.id}`)}
+                        onEdit={isAdmin ? () => {
+                          if (confirm("আপনি কি নিশ্চিত যে এই সাথীকে হালকা থেকে সরাতে চান?")) {
+                            removeMemberFromHalqaMutation.mutate(member.id);
+                          }
+                        } : undefined}
+                        onDelete={isAdmin ? () => {
+                          if (confirm("আপনি কি নিশ্চিত যে এই সাথীকে হালকা থেকে সরাতে চান?")) {
+                            removeMemberFromHalqaMutation.mutate(member.id);
+                          }
+                        } : undefined}
+                      />
                     );
                   })}
                 </div>
