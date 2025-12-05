@@ -24,6 +24,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +69,7 @@ const statusLabels: Record<string, { label: string; icon: typeof Clock }> = {
 export default function HalqaDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
   const [isAddTakajaOpen, setIsAddTakajaOpen] = useState(false);
   const [isEditHalqaOpen, setIsEditHalqaOpen] = useState(false);
@@ -77,6 +78,14 @@ export default function HalqaDetailsPage() {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedTakaja, setSelectedTakaja] = useState<Takaja | null>(null);
   const [activeTab, setActiveTab] = useState("takaja");
+
+  const handleViewChange = (view: string) => {
+    if (view === "settings") {
+      setLocation("/settings");
+    } else {
+      setLocation(`/dashboard?view=${view}`);
+    }
+  };
 
   const form = useForm<z.infer<typeof takajaFormSchema>>({
     resolver: zodResolver(takajaFormSchema),
@@ -360,32 +369,57 @@ export default function HalqaDetailsPage() {
 
   const isAdmin = user?.role === "super_admin" || user?.role === "manager";
 
-  if (halqaLoading) {
+  if (halqaLoading || !user) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <Skeleton className="h-8 w-48 mb-6" />
-        <Skeleton className="h-48 w-full mb-6" />
-        <Skeleton className="h-64 w-full" />
-      </div>
+      <DashboardLayout
+        userName={user?.name || ""}
+        userId={user?.id || ""}
+        userRole={user?.role as "super_admin" | "manager" | "member" || "member"}
+        activeView="halqa"
+        onViewChange={handleViewChange}
+        onLogout={logout}
+      >
+        <div className="max-w-6xl mx-auto">
+          <Skeleton className="h-8 w-48 mb-6" />
+          <Skeleton className="h-48 w-full mb-6" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   if (!halqa) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">হালকা পাওয়া যায়নি</h2>
-          <Button onClick={() => setLocation("/dashboard")}>
-            ড্যাশবোর্ডে ফিরে যান
-          </Button>
+      <DashboardLayout
+        userName={user?.name || ""}
+        userId={user?.id || ""}
+        userRole={user?.role as "super_admin" | "manager" | "member" || "member"}
+        activeView="halqa"
+        onViewChange={handleViewChange}
+        onLogout={logout}
+      >
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-2">হালকা পাওয়া যায়নি</h2>
+            <Button onClick={() => setLocation("/dashboard")}>
+              ড্যাশবোর্ডে ফিরে যান
+            </Button>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto p-6">
+    <DashboardLayout
+      userName={user?.name || ""}
+      userId={user?.id || ""}
+      userRole={user?.role as "super_admin" | "manager" | "member" || "member"}
+      activeView="halqa"
+      onViewChange={handleViewChange}
+      onLogout={logout}
+    >
+      <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <Button
             variant="ghost"
@@ -1149,6 +1183,6 @@ export default function HalqaDetailsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </DashboardLayout>
   );
 }

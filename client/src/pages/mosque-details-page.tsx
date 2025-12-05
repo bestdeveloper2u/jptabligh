@@ -8,6 +8,7 @@ import { ArrowLeft, Phone, MapPin, Building2, Users, Calendar, Edit, CheckCircle
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -81,13 +82,21 @@ const tabligActivitiesOptions = [
 export default function MosqueDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isFiveTasksEditOpen, setIsFiveTasksEditOpen] = useState(false);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
 
   const canManage = user?.role === "super_admin" || user?.role === "manager";
+
+  const handleViewChange = (view: string) => {
+    if (view === "settings") {
+      setLocation("/settings");
+    } else {
+      setLocation(`/dashboard?view=${view}`);
+    }
+  };
 
   const { data: mosqueData, isLoading: mosqueLoading } = useQuery<{ mosque: Mosque }>({
     queryKey: ["/api/mosques", id],
@@ -353,27 +362,43 @@ export default function MosqueDetailsPage() {
     memberForm.setValue("tabligActivities", updated);
   };
 
-  if (mosqueLoading) {
+  if (mosqueLoading || !user) {
     return (
-      <div className="min-h-screen bg-background p-6">
+      <DashboardLayout
+        userName={user?.name || ""}
+        userId={user?.id || ""}
+        userRole={user?.role as "super_admin" | "manager" | "member" || "member"}
+        activeView="mosques"
+        onViewChange={handleViewChange}
+        onLogout={logout}
+      >
         <div className="max-w-4xl mx-auto">
           <Skeleton className="h-8 w-32 mb-6" />
           <Skeleton className="h-64 w-full" />
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (!mosque) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">মসজিদ পাওয়া যায়নি</h2>
-          <Button onClick={() => setLocation("/dashboard")} data-testid="button-back-to-dashboard">
-            ড্যাশবোর্ডে ফিরে যান
-          </Button>
+      <DashboardLayout
+        userName={user?.name || ""}
+        userId={user?.id || ""}
+        userRole={user?.role as "super_admin" | "manager" | "member" || "member"}
+        activeView="mosques"
+        onViewChange={handleViewChange}
+        onLogout={logout}
+      >
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold mb-2">মসজিদ পাওয়া যায়নি</h2>
+            <Button onClick={() => setLocation("/dashboard")} data-testid="button-back-to-dashboard">
+              ড্যাশবোর্ডে ফিরে যান
+            </Button>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
@@ -421,8 +446,15 @@ export default function MosqueDetailsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto p-6">
+    <DashboardLayout
+      userName={user?.name || ""}
+      userId={user?.id || ""}
+      userRole={user?.role as "super_admin" | "manager" | "member" || "member"}
+      activeView="mosques"
+      onViewChange={handleViewChange}
+      onLogout={logout}
+    >
+      <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <Button
             variant="ghost"
@@ -1146,6 +1178,6 @@ export default function MosqueDetailsPage() {
           </Form>
         </DialogContent>
       </Dialog>
-    </div>
+    </DashboardLayout>
   );
 }
