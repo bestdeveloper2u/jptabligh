@@ -59,11 +59,19 @@ export default function MemberDetailsPage() {
 
   const canManage = user?.role === "super_admin" || user?.role === "manager";
 
+  const safeGoBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      setLocation("/dashboard", { replace: true });
+    }
+  };
+
   const handleViewChange = (view: string) => {
     if (view === "settings") {
-      setLocation("/settings");
+      setLocation("/settings", { replace: true });
     } else {
-      setLocation(`/dashboard?view=${view}`);
+      setLocation(`/dashboard?view=${view}`, { replace: true });
     }
   };
 
@@ -255,7 +263,7 @@ export default function MemberDetailsPage() {
         <div className="flex items-center justify-between mb-6">
           <Button
             variant="ghost"
-            onClick={() => window.history.back()}
+            onClick={safeGoBack}
             data-testid="button-back"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />

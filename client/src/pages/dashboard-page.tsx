@@ -152,7 +152,9 @@ export default function DashboardPage() {
     totalMembers: number;
     totalMosques: number;
     totalHalqas: number;
-    thisMonthTablig: number;
+    activeMosques: number;
+    membersWithActivities: number;
+    pendingTakajas: number;
   }}>({
     queryKey: ["/api/stats"],
   });
@@ -683,36 +685,48 @@ export default function DashboardPage() {
       </div>
 
       {statsLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-28" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <StatsCard
             title="মোট সাথী"
-            value={stats?.totalMembers.toString() || "০"}
+            value={stats?.totalMembers?.toString() || "০"}
             icon={Users}
             variant="primary"
           />
           <StatsCard
             title="মসজিদ"
-            value={stats?.totalMosques.toString() || "০"}
+            value={stats?.totalMosques?.toString() || "০"}
             icon={Building2}
             variant="secondary"
           />
           <StatsCard
             title="হালকা"
-            value={stats?.totalHalqas.toString() || "০"}
+            value={stats?.totalHalqas?.toString() || "০"}
             icon={MapPin}
             variant="accent"
           />
           <StatsCard
-            title="এই মাসে তাবলীগ"
-            value={stats?.thisMonthTablig.toString() || "০"}
-            icon={Calendar}
+            title="সক্রিয় মসজিদ"
+            value={stats?.activeMosques?.toString() || "০"}
+            icon={Building2}
             variant="primary"
+          />
+          <StatsCard
+            title="তাবলীগী সাথী"
+            value={stats?.membersWithActivities?.toString() || "০"}
+            icon={Calendar}
+            variant="secondary"
+          />
+          <StatsCard
+            title="অপেক্ষমান তাকাজা"
+            value={stats?.pendingTakajas?.toString() || "০"}
+            icon={ClipboardList}
+            variant="accent"
           />
         </div>
       )}
@@ -745,23 +759,36 @@ export default function DashboardPage() {
               কোন সাথী পাওয়া যায়নি
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-4">
-              {members.slice(0, 6).map((member) => (
-                <MemberCard
-                  key={member.id}
-                  id={member.id}
-                  name={member.name}
-                  phone={member.phone}
-                  thana={getThanaName(member.thanaId)}
-                  union={getUnionName(member.unionId)}
-                  mosque={member.mosqueId || ""}
-                  activities={member.tabligActivities || []}
-                  onView={() => setLocation(`/member/${member.id}`)}
-                  onEdit={canManage ? () => setEditMember(member) : undefined}
-                  onDelete={isSuperAdmin ? () => handleDeleteMember(member.id) : undefined}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid md:grid-cols-2 gap-4">
+                {members.slice(0, 6).map((member) => (
+                  <MemberCard
+                    key={member.id}
+                    id={member.id}
+                    name={member.name}
+                    phone={member.phone}
+                    thana={getThanaName(member.thanaId)}
+                    union={getUnionName(member.unionId)}
+                    mosque={member.mosqueId || ""}
+                    activities={member.tabligActivities || []}
+                    onView={() => setLocation(`/member/${member.id}`)}
+                    onEdit={canManage ? () => setEditMember(member) : undefined}
+                    onDelete={isSuperAdmin ? () => handleDeleteMember(member.id) : undefined}
+                  />
+                ))}
+              </div>
+              {members.length > 6 && (
+                <div className="text-center pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setActiveView("members")}
+                    data-testid="button-view-all-members"
+                  >
+                    সব দেখুন ({members.length} জন)
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -786,29 +813,42 @@ export default function DashboardPage() {
               কোন মসজিদ পাওয়া যায়নি
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-4">
-              {mosques.slice(0, 6).map((mosque) => (
-                <MosqueCard
-                  key={mosque.id}
-                  id={mosque.id}
-                  name={mosque.name}
-                  thana={getThanaName(mosque.thanaId)}
-                  union={getUnionName(mosque.unionId)}
-                  address={mosque.address}
-                  phone={mosque.phone || ""}
-                  membersCount={0}
-                  fiveTasksActive={mosque.fiveTasksActive || false}
-                  dailyMashwara={mosque.dailyMashwara || false}
-                  dailyTalim={mosque.dailyTalim || false}
-                  dailyDawah={mosque.dailyDawah || false}
-                  weeklyGasht={mosque.weeklyGasht || false}
-                  monthlyThreeDays={mosque.monthlyThreeDays || false}
-                  onView={() => setLocation(`/mosque/${mosque.id}`)}
-                  onEdit={canManage ? () => setEditMosque(mosque) : undefined}
-                  onDelete={canManage ? () => handleDeleteMosque(mosque.id) : undefined}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid md:grid-cols-2 gap-4">
+                {mosques.slice(0, 6).map((mosque) => (
+                  <MosqueCard
+                    key={mosque.id}
+                    id={mosque.id}
+                    name={mosque.name}
+                    thana={getThanaName(mosque.thanaId)}
+                    union={getUnionName(mosque.unionId)}
+                    address={mosque.address}
+                    phone={mosque.phone || ""}
+                    membersCount={0}
+                    fiveTasksActive={mosque.fiveTasksActive || false}
+                    dailyMashwara={mosque.dailyMashwara || false}
+                    dailyTalim={mosque.dailyTalim || false}
+                    dailyDawah={mosque.dailyDawah || false}
+                    weeklyGasht={mosque.weeklyGasht || false}
+                    monthlyThreeDays={mosque.monthlyThreeDays || false}
+                    onView={() => setLocation(`/mosque/${mosque.id}`)}
+                    onEdit={canManage ? () => setEditMosque(mosque) : undefined}
+                    onDelete={canManage ? () => handleDeleteMosque(mosque.id) : undefined}
+                  />
+                ))}
+              </div>
+              {mosques.length > 6 && (
+                <div className="text-center pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setActiveView("mosques")}
+                    data-testid="button-view-all-mosques"
+                  >
+                    সব দেখুন ({mosques.length} টি)
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -833,22 +873,35 @@ export default function DashboardPage() {
               কোন হালকা পাওয়া যায়নি
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-4">
-              {halqas.slice(0, 6).map((halqa) => (
-                <HalqaCard
-                  key={halqa.id}
-                  id={halqa.id}
-                  name={halqa.name}
-                  thana={getThanaName(halqa.thanaId)}
-                  union={getUnionName(halqa.unionId)}
-                  membersCount={halqa.membersCount}
-                  createdDate={new Date(halqa.createdAt).toLocaleDateString('bn-BD')}
-                  onView={() => navigateToHalqaDetails(halqa.id)}
-                  onEdit={canManage ? () => setEditHalqa(halqa) : undefined}
-                  onDelete={canManage ? () => handleDeleteHalqa(halqa.id) : undefined}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid md:grid-cols-2 gap-4">
+                {halqas.slice(0, 6).map((halqa) => (
+                  <HalqaCard
+                    key={halqa.id}
+                    id={halqa.id}
+                    name={halqa.name}
+                    thana={getThanaName(halqa.thanaId)}
+                    union={getUnionName(halqa.unionId)}
+                    membersCount={halqa.membersCount}
+                    createdDate={new Date(halqa.createdAt).toLocaleDateString('bn-BD')}
+                    onView={() => navigateToHalqaDetails(halqa.id)}
+                    onEdit={canManage ? () => setEditHalqa(halqa) : undefined}
+                    onDelete={canManage ? () => handleDeleteHalqa(halqa.id) : undefined}
+                  />
+                ))}
+              </div>
+              {halqas.length > 6 && (
+                <div className="text-center pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setActiveView("halqa")}
+                    data-testid="button-view-all-halqas"
+                  >
+                    সব দেখুন ({halqas.length} টি)
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
       </Tabs>
@@ -1741,7 +1794,7 @@ export default function DashboardPage() {
         {/* Statistics Section */}
         <div className="glass p-6 rounded-lg space-y-4">
           <h3 className="text-xl font-semibold mb-4">সংক্ষিপ্ত পরিসংখ্যান</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div className="text-center p-4 bg-muted/50 rounded-lg">
               <p className="text-3xl font-bold text-primary">{stats?.totalMembers || 0}</p>
               <p className="text-sm text-muted-foreground">মোট সাথী</p>
@@ -1755,8 +1808,16 @@ export default function DashboardPage() {
               <p className="text-sm text-muted-foreground">মোট হালকা</p>
             </div>
             <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <p className="text-3xl font-bold text-primary">{stats?.thisMonthTablig || 0}</p>
-              <p className="text-sm text-muted-foreground">এই মাসে তাবলীগ</p>
+              <p className="text-3xl font-bold text-primary">{stats?.activeMosques || 0}</p>
+              <p className="text-sm text-muted-foreground">সক্রিয় মসজিদ</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-3xl font-bold text-primary">{stats?.membersWithActivities || 0}</p>
+              <p className="text-sm text-muted-foreground">তাবলীগী সাথী</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-3xl font-bold text-primary">{stats?.pendingTakajas || 0}</p>
+              <p className="text-sm text-muted-foreground">অপেক্ষমান তাকাজা</p>
             </div>
           </div>
         </div>

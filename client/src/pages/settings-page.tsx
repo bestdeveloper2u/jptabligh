@@ -118,7 +118,7 @@ export default function SettingsPage() {
   
   const handleViewChange = (view: string) => {
     if (view === "settings") return;
-    setLocation(`/dashboard?view=${view}`);
+    setLocation(`/dashboard?view=${view}`, { replace: true });
   };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvMemberInputRef = useRef<HTMLInputElement>(null);

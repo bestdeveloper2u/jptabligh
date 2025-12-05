@@ -899,29 +899,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as any).user as User;
       const managerThanaId = getManagerThanaRestriction(user);
 
-      let members, mosques, halqas;
+      let members, mosques, halqas, takajas;
       
       if (managerThanaId) {
-        [members, mosques, halqas] = await Promise.all([
+        [members, mosques, halqas, takajas] = await Promise.all([
           storage.searchUsers("", managerThanaId, undefined, "member", undefined, undefined),
           storage.filterMosques(undefined, managerThanaId, undefined, undefined),
           storage.filterHalqas(undefined, managerThanaId, undefined),
+          storage.getAllTakajas(),
         ]);
       } else {
-        [members, mosques, halqas] = await Promise.all([
+        [members, mosques, halqas, takajas] = await Promise.all([
           storage.getUsersByRole("member"),
           storage.getAllMosques(),
           storage.getAllHalqas(),
+          storage.getAllTakajas(),
         ]);
       }
+
+      // Filter takajas based on manager's thana restriction
+      let filteredTakajas = takajas;
+      if (managerThanaId) {
+        const halqaIds = new Set(halqas.map(h => h.id));
+        filteredTakajas = takajas.filter(t => halqaIds.has(t.halqaId));
+      }
+
+      // Count active mosques (with five tasks enabled)
+      const activeMosques = mosques.filter(m => m.fiveTasksActive).length;
+      
+      // Count members with tablig activities
+      const membersWithActivities = members.filter(m => 
+        m.tabligActivities && m.tabligActivities.length > 0
+      ).length;
+
+      // Count pending takajas
+      const pendingTakajas = filteredTakajas.filter(t => t.status === "pending" || t.status === "in_progress").length;
 
       const stats = {
         totalMembers: members.length,
         totalMosques: mosques.length,
         totalHalqas: halqas.length,
-        thisMonthTablig: members.filter(m => 
-          m.tabligActivities && m.tabligActivities.length > 0
-        ).length,
+        activeMosques,
+        membersWithActivities,
+        pendingTakajas,
       };
 
       res.json({ stats });

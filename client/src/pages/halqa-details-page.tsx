@@ -79,11 +79,19 @@ export default function HalqaDetailsPage() {
   const [selectedTakaja, setSelectedTakaja] = useState<Takaja | null>(null);
   const [activeTab, setActiveTab] = useState("takaja");
 
+  const safeGoBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      setLocation("/dashboard", { replace: true });
+    }
+  };
+
   const handleViewChange = (view: string) => {
     if (view === "settings") {
-      setLocation("/settings");
+      setLocation("/settings", { replace: true });
     } else {
-      setLocation(`/dashboard?view=${view}`);
+      setLocation(`/dashboard?view=${view}`, { replace: true });
     }
   };
 
@@ -424,7 +432,7 @@ export default function HalqaDetailsPage() {
           <Button
             variant="ghost"
             className="gap-2"
-            onClick={() => window.history.back()}
+            onClick={safeGoBack}
             data-testid="button-back"
           >
             <ArrowLeft className="w-4 h-4" />
