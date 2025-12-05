@@ -6,6 +6,20 @@ A full-stack web application for managing Tabligh (Islamic missionary) activitie
 
 ## Recent Changes (December 2025)
 
+### Enhanced Settings Page
+- Redesigned settings page with accordion-based layout for better organization
+- Added the following settings sections:
+  1. **থিম সেটিংস**: Light/Dark/System/Schedule modes with scheduled dark mode times
+  2. **সাইট সেটিংস**: Logo and site title branding options (Super Admin only)
+  3. **ডেটা ম্যানেজমেন্ট**: Export/Import backup, cache clearing (Super Admin only)
+  4. **নোটিফিকেশন**: Notification preferences
+  5. **নিরাপত্তা**: Security settings with password change option (Super Admin only)
+  6. **সফটওয়্যার তথ্য**: App version, build date, and developer info
+- Added data statistics display showing counts of users, thanas, mosques, and halqas
+- Implemented JSON backup export and import functionality
+- Added cache clearing feature
+- Created API endpoints for /api/export and /api/import
+
 ### Five Tasks (পাঁচ কাজ) Feature for Mosques
 - Added complete tracking for the five daily tablig tasks at mosque level:
   1. **দৈনিক মাশওয়ারা** (Daily Mashwara) - with time field

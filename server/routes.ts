@@ -1165,6 +1165,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== Export/Import Routes (Super Admin Only) =====
+
+  // Export all data
+  app.get("/api/export", requireAuth, requireRole("super_admin"), async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      const thanas = await storage.getAllThanas();
+      const unions = await storage.getAllUnions();
+      const mosques = await storage.getAllMosques();
+      const halqas = await storage.getAllHalqas();
+      const takajas = await storage.getAllTakajas();
+      const settings = await storage.getAllSettings();
+
+      // Remove passwords from users
+      const usersWithoutPasswords = users.map(({ password, ...user }) => user);
+
+      res.json({
+        users: usersWithoutPasswords,
+        thanas,
+        unions,
+        mosques,
+        halqas,
+        takajas,
+        settings,
+      });
+    } catch (error) {
+      console.error("Export data error:", error);
+      res.status(500).json({ error: "ডেটা এক্সপোর্ট করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
+  // Import data
+  app.post("/api/import", requireAuth, requireRole("super_admin"), async (req, res) => {
+    try {
+      const { settings } = req.body;
+
+      // Import settings if provided
+      if (settings && Array.isArray(settings)) {
+        for (const setting of settings) {
+          if (setting.key && setting.value) {
+            await storage.setSetting(setting.key, setting.value);
+          }
+        }
+      }
+
+      res.json({ success: true, message: "ডেটা সফলভাবে ইমপোর্ট করা হয়েছে" });
+    } catch (error) {
+      console.error("Import data error:", error);
+      res.status(500).json({ error: "ডেটা ইমপোর্ট করতে ব্যর্থ হয়েছে" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
