@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Phone, Mail, MapPin, Building2, Users, CheckCircle2, Calendar, Edit } from "lucide-react";
+import { ArrowLeft, Phone, Mail, MapPin, Building2, Users, CheckCircle2, Calendar, Edit, Clock, Plane, CalendarDays } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -20,13 +20,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import type { User, Thana, Union, Mosque, Halqa } from "@shared/schema";
 
-const activityLabels: Record<string, string> = {
-  "tin-chilla": "তিন চিল্লা (৩ মাস)",
-  "ek-chilla": "এক চিল্লা (৪০ দিন)",
-  "bidesh-sofor": "বিদেশ সফর",
-  "tin-din": "তিন দিনের সাথী",
-  "sat-din": "সাত দিনের সাথী",
-  "dos-din": "১০ দিনের সাথী",
+const activityLabels: Record<string, { label: string; description: string; icon: typeof CheckCircle2 }> = {
+  "tin-chilla": { label: "তিন চিল্লা", description: "৩ মাস (১২০ দিন)", icon: CalendarDays },
+  "ek-chilla": { label: "এক চিল্লা", description: "৪০ দিন", icon: Calendar },
+  "bidesh-sofor": { label: "বিদেশ সফর", description: "বিদেশে দাওয়াতী সফর", icon: Plane },
+  "tin-din": { label: "৩ দিনের সাথী", description: "তিন দিন", icon: Clock },
+  "sat-din": { label: "৭ দিনের সাথী", description: "সাত দিন", icon: Clock },
+  "dos-din": { label: "১০ দিনের সাথী", description: "দশ দিন", icon: Clock },
 };
 
 const tabligActivities = [
@@ -223,7 +223,7 @@ export default function MemberDetailsPage() {
         <div className="flex items-center justify-between mb-6">
           <Button
             variant="ghost"
-            onClick={() => setLocation("/dashboard")}
+            onClick={() => window.history.back()}
             data-testid="button-back"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -305,19 +305,41 @@ export default function MemberDetailsPage() {
               </div>
             </div>
 
-            {activities.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="font-semibold text-lg border-b pb-2">তাবলীগ কার্যক্রম</h3>
-                <div className="flex flex-wrap gap-2">
-                  {activities.map((activity) => (
-                    <Badge key={activity} variant="outline" className="text-sm py-1" data-testid={`badge-activity-${activity}`}>
-                      <CheckCircle2 className="w-4 h-4 mr-2 text-green-600" />
-                      {activityLabels[activity] || activity}
-                    </Badge>
-                  ))}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg border-b pb-2">তাবলীগ কার্যক্রম</h3>
+              {activities.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {activities.map((activity) => {
+                    const activityInfo = activityLabels[activity];
+                    const IconComponent = activityInfo?.icon || CheckCircle2;
+                    return (
+                      <div 
+                        key={activity} 
+                        className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800"
+                        data-testid={`badge-activity-${activity}`}
+                      >
+                        <div className="p-2 rounded-lg bg-green-500/20 text-green-600 dark:text-green-400">
+                          <IconComponent className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-green-700 dark:text-green-300">
+                            {activityInfo?.label || activity}
+                          </p>
+                          {activityInfo?.description && (
+                            <p className="text-xs text-green-600/70 dark:text-green-400/70">
+                              {activityInfo.description}
+                            </p>
+                          )}
+                        </div>
+                        <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 ml-auto" />
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-muted-foreground text-sm">কোনো তাবলীগ কার্যক্রম নেই</p>
+              )}
+            </div>
 
             {member.createdAt && (
               <div className="pt-4 border-t">
@@ -530,7 +552,7 @@ export default function MemberDetailsPage() {
               />
 
               <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} data-testid="button-cancel-member">
                   বাতিল
                 </Button>
                 <Button type="submit" disabled={updateMemberMutation.isPending} data-testid="button-save-member">

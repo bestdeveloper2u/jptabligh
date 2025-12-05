@@ -22,6 +22,11 @@ interface MosqueCardProps {
   onView?: () => void;
 }
 
+const toBengaliNumber = (num: number): string => {
+  const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return num.toString().split('').map(d => bengaliDigits[parseInt(d)] || d).join('');
+};
+
 export default function MosqueCard({
   id,
   name,
@@ -81,7 +86,7 @@ export default function MosqueCard({
           {fiveTasksActive ? (
             <Badge variant="default" className="bg-green-600 hover:bg-green-700">
               <CheckCircle2 className="w-3 h-3 mr-1" />
-              পাঁচ কাজ চালু ({activeTasksCount}/৫)
+              পাঁচ কাজ চালু ({toBengaliNumber(activeTasksCount)}/৫)
             </Badge>
           ) : (
             <Badge variant="outline" className="text-muted-foreground">

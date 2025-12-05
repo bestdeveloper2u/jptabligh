@@ -390,11 +390,11 @@ export default function HalqaDetailsPage() {
           <Button
             variant="ghost"
             className="gap-2"
-            onClick={() => setLocation("/dashboard")}
+            onClick={() => window.history.back()}
             data-testid="button-back"
           >
             <ArrowLeft className="w-4 h-4" />
-            ড্যাশবোর্ডে ফিরে যান
+            পেছনে যান
           </Button>
           {isAdmin && (
             <Button onClick={openEditHalqaDialog} data-testid="button-edit-halqa">

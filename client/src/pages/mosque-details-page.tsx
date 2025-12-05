@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Phone, MapPin, Building2, Users, Calendar, Edit } from "lucide-react";
+import { ArrowLeft, Phone, MapPin, Building2, Users, Calendar, Edit, CheckCircle2, XCircle, Clock, BookOpen, Heart, Footprints, CalendarDays } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -16,8 +16,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import MemberCard from "@/components/MemberCard";
 import type { Mosque, Thana, Union, Halqa, User } from "@shared/schema";
+
+const toBengaliNumber = (num: number): string => {
+  const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return num.toString().split('').map(d => bengaliDigits[parseInt(d)] || d).join('');
+};
+
+const dayNamesBn: Record<string, string> = {
+  sunday: "রবিবার",
+  monday: "সোমবার",
+  tuesday: "মঙ্গলবার",
+  wednesday: "বুধবার",
+  thursday: "বৃহস্পতিবার",
+  friday: "শুক্রবার",
+  saturday: "শনিবার",
+};
 
 const editMosqueSchema = z.object({
   name: z.string().min(1, "মসজিদের নাম আবশ্যক"),
@@ -30,12 +46,27 @@ const editMosqueSchema = z.object({
   phone: z.string().optional(),
 });
 
+const fiveTasksSchema = z.object({
+  fiveTasksActive: z.boolean().default(false),
+  dailyMashwara: z.boolean().default(false),
+  dailyTalim: z.boolean().default(false),
+  dailyDawah: z.boolean().default(false),
+  weeklyGasht: z.boolean().default(false),
+  monthlyThreeDays: z.boolean().default(false),
+  mashwaraTime: z.string().optional(),
+  talimTime: z.string().optional(),
+  dawahTime: z.string().optional(),
+  gashtDay: z.string().optional(),
+  threeDaysSchedule: z.string().optional(),
+});
+
 export default function MosqueDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isFiveTasksEditOpen, setIsFiveTasksEditOpen] = useState(false);
 
   const canManage = user?.role === "super_admin" || user?.role === "manager";
 
@@ -76,6 +107,14 @@ export default function MosqueDetailsPage() {
   const unionName = unions.find(u => u.id === mosque?.unionId)?.nameBn || "";
   const halqaName = halqas.find(h => h.id === mosque?.halqaId)?.name || "";
 
+  const activeTasksCount = mosque ? [
+    mosque.dailyMashwara,
+    mosque.dailyTalim,
+    mosque.dailyDawah,
+    mosque.weeklyGasht,
+    mosque.monthlyThreeDays
+  ].filter(Boolean).length : 0;
+
   const form = useForm<z.infer<typeof editMosqueSchema>>({
     resolver: zodResolver(editMosqueSchema),
     defaultValues: {
@@ -87,6 +126,23 @@ export default function MosqueDetailsPage() {
       imamPhone: "",
       muazzinPhone: "",
       phone: "",
+    },
+  });
+
+  const fiveTasksForm = useForm<z.infer<typeof fiveTasksSchema>>({
+    resolver: zodResolver(fiveTasksSchema),
+    defaultValues: {
+      fiveTasksActive: false,
+      dailyMashwara: false,
+      dailyTalim: false,
+      dailyDawah: false,
+      weeklyGasht: false,
+      monthlyThreeDays: false,
+      mashwaraTime: "",
+      talimTime: "",
+      dawahTime: "",
+      gashtDay: "",
+      threeDaysSchedule: "",
     },
   });
 
@@ -125,6 +181,25 @@ export default function MosqueDetailsPage() {
     }
   };
 
+  const openFiveTasksEditDialog = () => {
+    if (mosque) {
+      fiveTasksForm.reset({
+        fiveTasksActive: mosque.fiveTasksActive || false,
+        dailyMashwara: mosque.dailyMashwara || false,
+        dailyTalim: mosque.dailyTalim || false,
+        dailyDawah: mosque.dailyDawah || false,
+        weeklyGasht: mosque.weeklyGasht || false,
+        monthlyThreeDays: mosque.monthlyThreeDays || false,
+        mashwaraTime: mosque.mashwaraTime || "",
+        talimTime: mosque.talimTime || "",
+        dawahTime: mosque.dawahTime || "",
+        gashtDay: mosque.gashtDay || "",
+        threeDaysSchedule: mosque.threeDaysSchedule || "",
+      });
+      setIsFiveTasksEditOpen(true);
+    }
+  };
+
   const updateMosqueMutation = useMutation({
     mutationFn: async (data: z.infer<typeof editMosqueSchema>) => {
       const payload = {
@@ -151,8 +226,45 @@ export default function MosqueDetailsPage() {
     },
   });
 
+  const updateFiveTasksMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof fiveTasksSchema>) => {
+      const payload = {
+        name: mosque?.name,
+        address: mosque?.address,
+        thanaId: mosque?.thanaId,
+        unionId: mosque?.unionId,
+        halqaId: mosque?.halqaId,
+        imamPhone: mosque?.imamPhone,
+        muazzinPhone: mosque?.muazzinPhone,
+        phone: mosque?.phone,
+        ...data,
+      };
+      await apiRequest("PUT", `/api/mosques/${id}`, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/mosques", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/mosques"] });
+      setIsFiveTasksEditOpen(false);
+      toast({
+        title: "সফল হয়েছে",
+        description: "পাঁচ কাজের তথ্য আপডেট করা হয়েছে",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "ব্যর্থ হয়েছে",
+        description: error.message,
+      });
+    },
+  });
+
   const handleSubmit = (data: z.infer<typeof editMosqueSchema>) => {
     updateMosqueMutation.mutate(data);
+  };
+
+  const handleFiveTasksSubmit = (data: z.infer<typeof fiveTasksSchema>) => {
+    updateFiveTasksMutation.mutate(data);
   };
 
   if (mosqueLoading) {
@@ -179,13 +291,56 @@ export default function MosqueDetailsPage() {
     );
   }
 
+  const fiveTasksItems = [
+    { 
+      key: 'dailyMashwara', 
+      label: 'দৈনিক মাশওয়ারা', 
+      icon: Users, 
+      active: mosque.dailyMashwara,
+      time: mosque.mashwaraTime,
+      timeLabel: 'সময়'
+    },
+    { 
+      key: 'dailyTalim', 
+      label: 'দৈনিক তালিম', 
+      icon: BookOpen, 
+      active: mosque.dailyTalim,
+      time: mosque.talimTime,
+      timeLabel: 'সময়'
+    },
+    { 
+      key: 'dailyDawah', 
+      label: 'দৈনিক দাওয়াত/মেহনত', 
+      icon: Heart, 
+      active: mosque.dailyDawah,
+      time: mosque.dawahTime,
+      timeLabel: 'সময়'
+    },
+    { 
+      key: 'weeklyGasht', 
+      label: 'সাপ্তাহিক গাশত', 
+      icon: Footprints, 
+      active: mosque.weeklyGasht,
+      time: mosque.gashtDay ? dayNamesBn[mosque.gashtDay] : null,
+      timeLabel: 'দিন'
+    },
+    { 
+      key: 'monthlyThreeDays', 
+      label: 'মাসিক ৩ দিন', 
+      icon: CalendarDays, 
+      active: mosque.monthlyThreeDays,
+      time: mosque.threeDaysSchedule,
+      timeLabel: 'সময়সূচী'
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <Button
             variant="ghost"
-            onClick={() => setLocation("/dashboard")}
+            onClick={() => window.history.back()}
             data-testid="button-back"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -264,6 +419,80 @@ export default function MosqueDetailsPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">পাঁচ কাজ</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {mosque.fiveTasksActive ? (
+                      <span className="text-green-600 dark:text-green-400">
+                        চালু আছে ({toBengaliNumber(activeTasksCount)}/৫)
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">চালু নেই</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              {canManage && (
+                <Button variant="outline" onClick={openFiveTasksEditDialog} data-testid="button-edit-five-tasks">
+                  <Edit className="w-4 h-4 mr-2" />
+                  সম্পাদনা
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {fiveTasksItems.map((item) => {
+                const IconComponent = item.icon;
+                return (
+                  <div 
+                    key={item.key}
+                    className={`p-4 rounded-lg border ${
+                      item.active 
+                        ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800' 
+                        : 'bg-muted/30 border-muted'
+                    }`}
+                    data-testid={`five-task-${item.key}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        item.active 
+                          ? 'bg-green-500/20 text-green-600 dark:text-green-400' 
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        <IconComponent className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium">{item.label}</span>
+                          {item.active ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-muted-foreground" />
+                          )}
+                        </div>
+                        {item.active && item.time && (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <Clock className="w-3 h-3" />
+                            <span>{item.timeLabel}: {item.time}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 
@@ -463,11 +692,209 @@ export default function MosqueDetailsPage() {
               </div>
 
               <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} data-testid="button-cancel-mosque">
                   বাতিল
                 </Button>
                 <Button type="submit" disabled={updateMosqueMutation.isPending} data-testid="button-save-mosque">
                   {updateMosqueMutation.isPending ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isFiveTasksEditOpen} onOpenChange={setIsFiveTasksEditOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>পাঁচ কাজ সম্পাদনা</DialogTitle>
+            <DialogDescription>মসজিদের পাঁচ কাজের তথ্য আপডেট করুন</DialogDescription>
+          </DialogHeader>
+          <Form {...fiveTasksForm}>
+            <form onSubmit={fiveTasksForm.handleSubmit(handleFiveTasksSubmit)} className="space-y-6">
+              <FormField
+                control={fiveTasksForm.control}
+                name="fiveTasksActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">পাঁচ কাজ চালু</FormLabel>
+                      <p className="text-sm text-muted-foreground">এই মসজিদে পাঁচ কাজ চালু আছে কিনা</p>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="switch-five-tasks-active"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <div className="space-y-4">
+                <h4 className="font-medium border-b pb-2">কাজসমূহ</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="dailyMashwara"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                        <FormLabel className="font-normal">দৈনিক মাশওয়ারা</FormLabel>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-daily-mashwara" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="mashwaraTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>মাশওয়ারার সময়</FormLabel>
+                        <FormControl>
+                          <Input placeholder="যেমন: ফজরের পর" {...field} data-testid="input-mashwara-time" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="dailyTalim"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                        <FormLabel className="font-normal">দৈনিক তালিম</FormLabel>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-daily-talim" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="talimTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>তালিমের সময়</FormLabel>
+                        <FormControl>
+                          <Input placeholder="যেমন: এশার পর" {...field} data-testid="input-talim-time" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="dailyDawah"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                        <FormLabel className="font-normal">দৈনিক দাওয়াত/মেহনত</FormLabel>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-daily-dawah" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="dawahTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>দাওয়াতের সময়</FormLabel>
+                        <FormControl>
+                          <Input placeholder="যেমন: আসরের পর" {...field} data-testid="input-dawah-time" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="weeklyGasht"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                        <FormLabel className="font-normal">সাপ্তাহিক গাশত</FormLabel>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-weekly-gasht" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="gashtDay"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>গাশতের দিন</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-gasht-day">
+                              <SelectValue placeholder="দিন নির্বাচন করুন" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="saturday">শনিবার</SelectItem>
+                            <SelectItem value="sunday">রবিবার</SelectItem>
+                            <SelectItem value="monday">সোমবার</SelectItem>
+                            <SelectItem value="tuesday">মঙ্গলবার</SelectItem>
+                            <SelectItem value="wednesday">বুধবার</SelectItem>
+                            <SelectItem value="thursday">বৃহস্পতিবার</SelectItem>
+                            <SelectItem value="friday">শুক্রবার</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="monthlyThreeDays"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                        <FormLabel className="font-normal">মাসিক ৩ দিন</FormLabel>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-monthly-three-days" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={fiveTasksForm.control}
+                    name="threeDaysSchedule"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>৩ দিনের সময়সূচী</FormLabel>
+                        <FormControl>
+                          <Input placeholder="যেমন: প্রতি মাসের ১ম সপ্তাহ" {...field} data-testid="input-three-days-schedule" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsFiveTasksEditOpen(false)} data-testid="button-cancel-five-tasks">
+                  বাতিল
+                </Button>
+                <Button type="submit" disabled={updateFiveTasksMutation.isPending} data-testid="button-save-five-tasks">
+                  {updateFiveTasksMutation.isPending ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
                 </Button>
               </div>
             </form>
