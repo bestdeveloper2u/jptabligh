@@ -2333,6 +2333,13 @@ function AddMosqueDialog({
   });
   
   const fiveTasksActive = form.watch("fiveTasksActive");
+  const dailyMashwara = form.watch("dailyMashwara");
+  const dailyTalim = form.watch("dailyTalim");
+  const dailyDawah = form.watch("dailyDawah");
+  const weeklyGasht = form.watch("weeklyGasht");
+  const monthlyThreeDays = form.watch("monthlyThreeDays");
+  
+  const hasAtLeastOneTask = dailyMashwara || dailyTalim || dailyDawah || weeklyGasht || monthlyThreeDays;
 
   const selectedThana = form.watch("thanaId");
   const selectedUnion = form.watch("unionId");
@@ -2569,6 +2576,11 @@ function AddMosqueDialog({
                 <div className="space-y-4 pt-4 border-t">
                   <h4 className="font-medium text-sm text-muted-foreground">কোন কোন কাজ চালু আছে:</h4>
                   
+                  {/* পাঁচ কাজ চালু থাকলে অন্তত একটা কাজ সিলেক্ট করতে হবে */}
+                  {fiveTasksActive && !hasAtLeastOneTask && (
+                    <p className="text-sm text-destructive">অন্তত একটি কাজ সিলেক্ট করুন</p>
+                  )}
+
                   {/* প্রতিদিন মাশওয়ারা */}
                   <div className="grid md:grid-cols-2 gap-4 items-start">
                     <FormField
@@ -2596,6 +2608,7 @@ function AddMosqueDialog({
                             <Input 
                               placeholder="যেমন: ফজরের পর / এশার পর" 
                               {...field} 
+                              disabled={!dailyMashwara}
                               data-testid="input-mashwara-time"
                             />
                           </FormControl>
@@ -2631,6 +2644,7 @@ function AddMosqueDialog({
                             <Input 
                               placeholder="যেমন: মাগরিবের পর / এশার পর" 
                               {...field} 
+                              disabled={!dailyTalim}
                               data-testid="input-talim-time"
                             />
                           </FormControl>
@@ -2666,6 +2680,7 @@ function AddMosqueDialog({
                             <Input 
                               placeholder="যেমন: আসরের পর / জোহরের পর" 
                               {...field} 
+                              disabled={!dailyDawah}
                               data-testid="input-dawah-time"
                             />
                           </FormControl>
@@ -2697,13 +2712,26 @@ function AddMosqueDialog({
                       name="gashtDay"
                       render={({ field }) => (
                         <FormItem>
-                          <FormControl>
-                            <Input 
-                              placeholder="যেমন: বৃহস্পতিবার মাগরিবের পর" 
-                              {...field} 
-                              data-testid="input-gasht-day"
-                            />
-                          </FormControl>
+                          <Select 
+                            onValueChange={field.onChange} 
+                            value={field.value || ""}
+                            disabled={!weeklyGasht}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-gasht-day">
+                                <SelectValue placeholder="দিন নির্বাচন করুন" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="saturday">শনিবার</SelectItem>
+                              <SelectItem value="sunday">রবিবার</SelectItem>
+                              <SelectItem value="monday">সোমবার</SelectItem>
+                              <SelectItem value="tuesday">মঙ্গলবার</SelectItem>
+                              <SelectItem value="wednesday">বুধবার</SelectItem>
+                              <SelectItem value="thursday">বৃহস্পতিবার</SelectItem>
+                              <SelectItem value="friday">শুক্রবার</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </FormItem>
                       )}
                     />
@@ -2736,6 +2764,7 @@ function AddMosqueDialog({
                             <Input 
                               placeholder="যেমন: মাসের প্রথম সপ্তাহে" 
                               {...field} 
+                              disabled={!monthlyThreeDays}
                               data-testid="input-three-days-schedule"
                             />
                           </FormControl>
@@ -2757,7 +2786,11 @@ function AddMosqueDialog({
               >
                 বাতিল
               </Button>
-              <Button type="submit" disabled={isLoading} data-testid="button-submit-mosque">
+              <Button 
+                type="submit" 
+                disabled={isLoading || (fiveTasksActive && !hasAtLeastOneTask)} 
+                data-testid="button-submit-mosque"
+              >
                 {isLoading ? "যোগ হচ্ছে..." : "মসজিদ যোগ করুন"}
               </Button>
             </div>
@@ -3387,12 +3420,17 @@ function EditMosqueForm({
           <div className="space-y-3 pt-3 border-t">
             <p className="text-sm font-medium text-muted-foreground">কোন কোন কাজ চালু আছে:</p>
             
+            {/* পাঁচ কাজ চালু থাকলে অন্তত একটা কাজ সিলেক্ট করতে হবে */}
+            {!(dailyMashwara || dailyTalim || dailyDawah || weeklyGasht || monthlyThreeDays) && (
+              <p className="text-sm text-destructive">অন্তত একটি কাজ সিলেক্ট করুন</p>
+            )}
+            
             <div className="grid md:grid-cols-2 gap-3 items-center">
               <div className="flex items-center space-x-2">
                 <Checkbox checked={dailyMashwara} onCheckedChange={(c) => setDailyMashwara(!!c)} id="edit-mashwara" />
                 <Label htmlFor="edit-mashwara" className="cursor-pointer">প্রতিদিন মাশওয়ারা</Label>
               </div>
-              <Input placeholder="সময় (যেমন: ফজরের পর)" value={mashwaraTime} onChange={(e) => setMashwaraTime(e.target.value)} />
+              <Input placeholder="সময় (যেমন: ফজরের পর)" value={mashwaraTime} onChange={(e) => setMashwaraTime(e.target.value)} disabled={!dailyMashwara} />
             </div>
 
             <div className="grid md:grid-cols-2 gap-3 items-center">
@@ -3400,7 +3438,7 @@ function EditMosqueForm({
                 <Checkbox checked={dailyTalim} onCheckedChange={(c) => setDailyTalim(!!c)} id="edit-talim" />
                 <Label htmlFor="edit-talim" className="cursor-pointer">প্রতিদিন তা'লিম</Label>
               </div>
-              <Input placeholder="সময় (যেমন: মাগরিবের পর)" value={talimTime} onChange={(e) => setTalimTime(e.target.value)} />
+              <Input placeholder="সময় (যেমন: মাগরিবের পর)" value={talimTime} onChange={(e) => setTalimTime(e.target.value)} disabled={!dailyTalim} />
             </div>
 
             <div className="grid md:grid-cols-2 gap-3 items-center">
@@ -3408,7 +3446,7 @@ function EditMosqueForm({
                 <Checkbox checked={dailyDawah} onCheckedChange={(c) => setDailyDawah(!!c)} id="edit-dawah" />
                 <Label htmlFor="edit-dawah" className="cursor-pointer">প্রতিদিন আড়াই ঘণ্টা মেহনত</Label>
               </div>
-              <Input placeholder="সময় (যেমন: আসরের পর)" value={dawahTime} onChange={(e) => setDawahTime(e.target.value)} />
+              <Input placeholder="সময় (যেমন: আসরের পর)" value={dawahTime} onChange={(e) => setDawahTime(e.target.value)} disabled={!dailyDawah} />
             </div>
 
             <div className="grid md:grid-cols-2 gap-3 items-center">
@@ -3416,7 +3454,7 @@ function EditMosqueForm({
                 <Checkbox checked={weeklyGasht} onCheckedChange={(c) => setWeeklyGasht(!!c)} id="edit-gasht" />
                 <Label htmlFor="edit-gasht" className="cursor-pointer">সাপ্তাহিক গাশত</Label>
               </div>
-              <Select value={gashtDay || ""} onValueChange={setGashtDay}>
+              <Select value={gashtDay || ""} onValueChange={setGashtDay} disabled={!weeklyGasht}>
                 <SelectTrigger data-testid="select-edit-gasht-day">
                   <SelectValue placeholder="দিন নির্বাচন করুন" />
                 </SelectTrigger>
@@ -3437,7 +3475,7 @@ function EditMosqueForm({
                 <Checkbox checked={monthlyThreeDays} onCheckedChange={(c) => setMonthlyThreeDays(!!c)} id="edit-three-days" />
                 <Label htmlFor="edit-three-days" className="cursor-pointer">প্রতি মাসে ৩ দিন</Label>
               </div>
-              <Input placeholder="সময়সূচী (যেমন: মাসের প্রথম সপ্তাহে)" value={threeDaysSchedule} onChange={(e) => setThreeDaysSchedule(e.target.value)} />
+              <Input placeholder="সময়সূচী (যেমন: মাসের প্রথম সপ্তাহে)" value={threeDaysSchedule} onChange={(e) => setThreeDaysSchedule(e.target.value)} disabled={!monthlyThreeDays} />
             </div>
           </div>
         )}
@@ -3445,7 +3483,13 @@ function EditMosqueForm({
 
       <div className="flex justify-end gap-3">
         <Button type="button" variant="outline" onClick={onCancel}>বাতিল</Button>
-        <Button type="submit" disabled={isLoading} data-testid="button-save-edit-mosque">{isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}</Button>
+        <Button 
+          type="submit" 
+          disabled={isLoading || (fiveTasksActive && !(dailyMashwara || dailyTalim || dailyDawah || weeklyGasht || monthlyThreeDays))} 
+          data-testid="button-save-edit-mosque"
+        >
+          {isLoading ? "আপডেট হচ্ছে..." : "আপডেট করুন"}
+        </Button>
       </div>
     </form>
   );

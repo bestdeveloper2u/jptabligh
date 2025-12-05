@@ -1,15 +1,16 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Phone, MapPin, Building2, Users, Calendar, Edit, CheckCircle2, XCircle, Clock, BookOpen, Heart, Footprints, CalendarDays } from "lucide-react";
+import { ArrowLeft, Phone, MapPin, Building2, Users, Calendar, Edit, CheckCircle2, XCircle, Clock, BookOpen, Heart, Footprints, CalendarDays, UserPlus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -60,6 +61,23 @@ const fiveTasksSchema = z.object({
   threeDaysSchedule: z.string().optional(),
 });
 
+const memberFormSchema = z.object({
+  name: z.string().min(1, "নাম আবশ্যক"),
+  email: z.string().email("সঠিক ইমেইল দিন").optional().or(z.literal("")),
+  phone: z.string().min(11, "সঠিক মোবাইল নাম্বার দিন"),
+  password: z.string().min(6, "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে"),
+  tabligActivities: z.array(z.string()).optional(),
+});
+
+const tabligActivitiesOptions = [
+  { id: "daily_talim", label: "দৈনিক তা'লিম" },
+  { id: "daily_mashwara", label: "দৈনিক মাশওয়ারা" },
+  { id: "weekly_gasht", label: "সাপ্তাহিক গাশত" },
+  { id: "monthly_3_days", label: "মাসিক ৩ দিন" },
+  { id: "yearly_chilla", label: "বাৎসরিক চিল্লা" },
+  { id: "dawah_work", label: "দাওয়াতের কাজ" },
+];
+
 export default function MosqueDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -67,6 +85,7 @@ export default function MosqueDetailsPage() {
   const { toast } = useToast();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isFiveTasksEditOpen, setIsFiveTasksEditOpen] = useState(false);
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
 
   const canManage = user?.role === "super_admin" || user?.role === "manager";
 
@@ -146,8 +165,31 @@ export default function MosqueDetailsPage() {
     },
   });
 
+  const memberForm = useForm<z.infer<typeof memberFormSchema>>({
+    resolver: zodResolver(memberFormSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      password: "",
+      tabligActivities: [],
+    },
+  });
+
+  const selectedMemberActivities = memberForm.watch("tabligActivities") || [];
+
   const selectedThanaId = form.watch("thanaId");
   const selectedUnionId = form.watch("unionId");
+  
+  // Five tasks form watch values
+  const fiveTasksActive = fiveTasksForm.watch("fiveTasksActive");
+  const dailyMashwaraWatch = fiveTasksForm.watch("dailyMashwara");
+  const dailyTalimWatch = fiveTasksForm.watch("dailyTalim");
+  const dailyDawahWatch = fiveTasksForm.watch("dailyDawah");
+  const weeklyGashtWatch = fiveTasksForm.watch("weeklyGasht");
+  const monthlyThreeDaysWatch = fiveTasksForm.watch("monthlyThreeDays");
+  
+  const hasAtLeastOneTaskInDetails = dailyMashwaraWatch || dailyTalimWatch || dailyDawahWatch || weeklyGashtWatch || monthlyThreeDaysWatch;
 
   const filteredUnions = useMemo(() => {
     if (!selectedThanaId || selectedThanaId === "all") return unions;
@@ -259,12 +301,56 @@ export default function MosqueDetailsPage() {
     },
   });
 
+  const createMemberMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof memberFormSchema>) => {
+      const payload = {
+        ...data,
+        role: "member",
+        thanaId: mosque?.thanaId,
+        unionId: mosque?.unionId,
+        mosqueId: mosque?.id,
+        halqaId: mosque?.halqaId || null,
+      };
+      const response = await apiRequest("POST", "/api/auth/register", payload);
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/mosques", id] });
+      setIsAddMemberOpen(false);
+      memberForm.reset();
+      toast({
+        title: "সফল হয়েছে",
+        description: "নতুন সাথী যোগ করা হয়েছে",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "ব্যর্থ হয়েছে",
+        description: error.message,
+      });
+    },
+  });
+
   const handleSubmit = (data: z.infer<typeof editMosqueSchema>) => {
     updateMosqueMutation.mutate(data);
   };
 
   const handleFiveTasksSubmit = (data: z.infer<typeof fiveTasksSchema>) => {
     updateFiveTasksMutation.mutate(data);
+  };
+
+  const handleMemberSubmit = (data: z.infer<typeof memberFormSchema>) => {
+    createMemberMutation.mutate(data);
+  };
+
+  const handleMemberActivityToggle = (activityId: string) => {
+    const current = selectedMemberActivities;
+    const updated = current.includes(activityId)
+      ? current.filter(id => id !== activityId)
+      : [...current, activityId];
+    memberForm.setValue("tabligActivities", updated);
   };
 
   if (mosqueLoading) {
@@ -497,10 +583,22 @@ export default function MosqueDetailsPage() {
         </Card>
 
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            এই মসজিদের সাথীগণ ({members.length})
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              এই মসজিদের সাথীগণ ({members.length})
+            </h2>
+            {canManage && (
+              <Button 
+                onClick={() => setIsAddMemberOpen(true)}
+                size="sm"
+                data-testid="button-add-member-from-mosque"
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                সাথী যোগ করুন
+              </Button>
+            )}
+          </div>
 
           {membersLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -735,6 +833,11 @@ export default function MosqueDetailsPage() {
               <div className="space-y-4">
                 <h4 className="font-medium border-b pb-2">কাজসমূহ</h4>
                 
+                {/* পাঁচ কাজ চালু থাকলে অন্তত একটা কাজ সিলেক্ট করতে হবে */}
+                {fiveTasksActive && !hasAtLeastOneTaskInDetails && (
+                  <p className="text-sm text-destructive">অন্তত একটি কাজ সিলেক্ট করুন</p>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={fiveTasksForm.control}
@@ -756,7 +859,7 @@ export default function MosqueDetailsPage() {
                       <FormItem>
                         <FormLabel>মাশওয়ারার সময়</FormLabel>
                         <FormControl>
-                          <Input placeholder="যেমন: ফজরের পর" {...field} data-testid="input-mashwara-time" />
+                          <Input placeholder="যেমন: ফজরের পর" {...field} disabled={!dailyMashwaraWatch} data-testid="input-mashwara-time" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -784,7 +887,7 @@ export default function MosqueDetailsPage() {
                       <FormItem>
                         <FormLabel>তালিমের সময়</FormLabel>
                         <FormControl>
-                          <Input placeholder="যেমন: এশার পর" {...field} data-testid="input-talim-time" />
+                          <Input placeholder="যেমন: এশার পর" {...field} disabled={!dailyTalimWatch} data-testid="input-talim-time" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -812,7 +915,7 @@ export default function MosqueDetailsPage() {
                       <FormItem>
                         <FormLabel>দাওয়াতের সময়</FormLabel>
                         <FormControl>
-                          <Input placeholder="যেমন: আসরের পর" {...field} data-testid="input-dawah-time" />
+                          <Input placeholder="যেমন: আসরের পর" {...field} disabled={!dailyDawahWatch} data-testid="input-dawah-time" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -839,7 +942,7 @@ export default function MosqueDetailsPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>গাশতের দিন</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <Select onValueChange={field.onChange} value={field.value || ""} disabled={!weeklyGashtWatch}>
                           <FormControl>
                             <SelectTrigger data-testid="select-gasht-day">
                               <SelectValue placeholder="দিন নির্বাচন করুন" />
@@ -881,7 +984,7 @@ export default function MosqueDetailsPage() {
                       <FormItem>
                         <FormLabel>৩ দিনের সময়সূচী</FormLabel>
                         <FormControl>
-                          <Input placeholder="যেমন: প্রতি মাসের ১ম সপ্তাহ" {...field} data-testid="input-three-days-schedule" />
+                          <Input placeholder="যেমন: প্রতি মাসের ১ম সপ্তাহ" {...field} disabled={!monthlyThreeDaysWatch} data-testid="input-three-days-schedule" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -893,8 +996,144 @@ export default function MosqueDetailsPage() {
                 <Button type="button" variant="outline" onClick={() => setIsFiveTasksEditOpen(false)} data-testid="button-cancel-five-tasks">
                   বাতিল
                 </Button>
-                <Button type="submit" disabled={updateFiveTasksMutation.isPending} data-testid="button-save-five-tasks">
+                <Button 
+                  type="submit" 
+                  disabled={updateFiveTasksMutation.isPending || (fiveTasksActive && !hasAtLeastOneTaskInDetails)} 
+                  data-testid="button-save-five-tasks"
+                >
                   {updateFiveTasksMutation.isPending ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Member Dialog */}
+      <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>নতুন সাথী যোগ করুন</DialogTitle>
+            <DialogDescription>
+              {mosque.name} মসজিদে নতুন তাবলীগ সাথী যোগ করুন
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Pre-filled mosque info */}
+          <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+            <h4 className="font-medium text-sm text-muted-foreground">মসজিদের তথ্য (স্বয়ংক্রিয়ভাবে নির্বাচিত)</h4>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div><span className="text-muted-foreground">মসজিদ:</span> {mosque.name}</div>
+              <div><span className="text-muted-foreground">থানা:</span> {thanaName}</div>
+              <div><span className="text-muted-foreground">ইউনিয়ন:</span> {unionName}</div>
+              {halqaName && <div><span className="text-muted-foreground">হালকা:</span> {halqaName}</div>}
+            </div>
+          </div>
+
+          <Form {...memberForm}>
+            <form onSubmit={memberForm.handleSubmit(handleMemberSubmit)} className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                <FormField
+                  control={memberForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>পূর্ণ নাম *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="নাম লিখুন" {...field} data-testid="input-new-member-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={memberForm.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>মোবাইল নাম্বার *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="০১৭১২৩৪৫৬৭৮" {...field} data-testid="input-new-member-phone" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <FormField
+                  control={memberForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ইমেইল (ঐচ্ছিক)</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="example@email.com" {...field} data-testid="input-new-member-email" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={memberForm.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>পাসওয়ার্ড *</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="••••••••" {...field} data-testid="input-new-member-password" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <FormLabel>তাবলীগী কার্যক্রম</FormLabel>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {tabligActivitiesOptions.map((activity) => (
+                    <div
+                      key={activity.id}
+                      className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${
+                        selectedMemberActivities.includes(activity.id)
+                          ? 'bg-primary/10 border-primary'
+                          : 'hover-elevate'
+                      }`}
+                      onClick={() => handleMemberActivityToggle(activity.id)}
+                      data-testid={`activity-toggle-${activity.id}`}
+                    >
+                      <Checkbox
+                        checked={selectedMemberActivities.includes(activity.id)}
+                        onCheckedChange={() => handleMemberActivityToggle(activity.id)}
+                      />
+                      <span className="text-sm">{activity.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsAddMemberOpen(false);
+                    memberForm.reset();
+                  }}
+                  data-testid="button-cancel-add-member"
+                >
+                  বাতিল
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createMemberMutation.isPending}
+                  data-testid="button-save-new-member"
+                >
+                  {createMemberMutation.isPending ? "সংরক্ষণ হচ্ছে..." : "সাথী যোগ করুন"}
                 </Button>
               </div>
             </form>

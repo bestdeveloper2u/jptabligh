@@ -9,6 +9,7 @@ import DashboardPage from "@/pages/dashboard-page";
 import HalqaDetailsPage from "@/pages/halqa-details-page";
 import MemberDetailsPage from "@/pages/member-details-page";
 import MosqueDetailsPage from "@/pages/mosque-details-page";
+import SettingsPage from "@/pages/settings-page";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -44,6 +45,9 @@ function Router() {
       </Route>
       <Route path="/mosque/:id">
         {() => <ProtectedRoute component={MosqueDetailsPage} />}
+      </Route>
+      <Route path="/settings">
+        {() => <ProtectedRoute component={SettingsPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

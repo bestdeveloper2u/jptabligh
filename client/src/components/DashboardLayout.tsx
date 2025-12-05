@@ -1,10 +1,12 @@
-import { useState } from "react";
-import { Home, Building2, MapPin, Users, Settings, UserPlus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Home, Building2, MapPin, Users, Settings, UserPlus, PanelLeftClose, PanelLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import TopNavigation from "./TopNavigation";
 import BottomNavigation from "./BottomNavigation";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Takaja } from "@shared/schema";
 
 interface DashboardLayoutProps {
@@ -35,15 +37,27 @@ export default function DashboardLayout({
   onViewChange,
   onLogout 
 }: DashboardLayoutProps) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem("sidebarCollapsed");
+    return saved === "true";
+  });
   const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    localStorage.setItem("sidebarCollapsed", String(isDesktopSidebarCollapsed));
+  }, [isDesktopSidebarCollapsed]);
+
+  const toggleDesktopSidebar = () => {
+    setIsDesktopSidebarCollapsed(!isDesktopSidebarCollapsed);
+  };
 
   const handleProfileClick = () => {
     setLocation(`/member/${userId}`);
   };
 
   const handleSettingsClick = () => {
-    onViewChange("settings");
+    setLocation("/settings");
   };
 
   const { data: myTakajasData } = useQuery<{ takajas: Takaja[] }>({
@@ -98,7 +112,11 @@ export default function DashboardLayout({
                 <button
                   key={item.id}
                   onClick={() => {
-                    onViewChange(item.id);
+                    if (item.id === "settings") {
+                      setLocation("/settings");
+                    } else {
+                      onViewChange(item.id);
+                    }
                     setIsSidebarOpen(false);
                   }}
                   className={cn(
