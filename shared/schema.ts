@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -45,6 +45,19 @@ export const mosques = pgTable("mosques", {
   imamPhone: text("imam_phone"),
   muazzinPhone: text("muazzin_phone"),
   phone: text("phone"),
+  // পাঁচ কাজ (Five Tasks of Tablig)
+  fiveTasksActive: boolean("five_tasks_active").default(false),
+  dailyMashwara: boolean("daily_mashwara").default(false),
+  dailyTalim: boolean("daily_talim").default(false),
+  dailyDawah: boolean("daily_dawah").default(false),
+  weeklyGasht: boolean("weekly_gasht").default(false),
+  monthlyThreeDays: boolean("monthly_three_days").default(false),
+  // সময়সূচী (Timing fields)
+  mashwaraTime: text("mashwara_time"),
+  talimTime: text("talim_time"),
+  dawahTime: text("dawah_time"),
+  gashtDay: text("gasht_day"),
+  threeDaysSchedule: text("three_days_schedule"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
