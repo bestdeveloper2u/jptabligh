@@ -833,6 +833,12 @@ export default function MosqueDetailsPage() {
               <div className="space-y-4">
                 <h4 className="font-medium border-b pb-2">কাজসমূহ</h4>
                 
+                {!fiveTasksActive && (
+                  <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                    পাঁচ কাজ চালু করুন তাহলে সময়সূচী সেট করতে পারবেন
+                  </p>
+                )}
+                
                 {/* পাঁচ কাজ চালু থাকলে অন্তত একটা কাজ সিলেক্ট করতে হবে */}
                 {fiveTasksActive && !hasAtLeastOneTaskInDetails && (
                   <p className="text-sm text-destructive">অন্তত একটি কাজ সিলেক্ট করুন</p>
@@ -859,7 +865,7 @@ export default function MosqueDetailsPage() {
                       <FormItem>
                         <FormLabel>মাশওয়ারার সময়</FormLabel>
                         <FormControl>
-                          <Input placeholder="যেমন: ফজরের পর" {...field} disabled={!dailyMashwaraWatch} data-testid="input-mashwara-time" />
+                          <Input placeholder="যেমন: ফজরের পর" {...field} disabled={!fiveTasksActive || !dailyMashwaraWatch} data-testid="input-mashwara-time" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -887,7 +893,7 @@ export default function MosqueDetailsPage() {
                       <FormItem>
                         <FormLabel>তালিমের সময়</FormLabel>
                         <FormControl>
-                          <Input placeholder="যেমন: এশার পর" {...field} disabled={!dailyTalimWatch} data-testid="input-talim-time" />
+                          <Input placeholder="যেমন: এশার পর" {...field} disabled={!fiveTasksActive || !dailyTalimWatch} data-testid="input-talim-time" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -915,7 +921,7 @@ export default function MosqueDetailsPage() {
                       <FormItem>
                         <FormLabel>দাওয়াতের সময়</FormLabel>
                         <FormControl>
-                          <Input placeholder="যেমন: আসরের পর" {...field} disabled={!dailyDawahWatch} data-testid="input-dawah-time" />
+                          <Input placeholder="যেমন: আসরের পর" {...field} disabled={!fiveTasksActive || !dailyDawahWatch} data-testid="input-dawah-time" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -942,7 +948,7 @@ export default function MosqueDetailsPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>গাশতের দিন</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""} disabled={!weeklyGashtWatch}>
+                        <Select onValueChange={field.onChange} value={field.value || ""} disabled={!fiveTasksActive || !weeklyGashtWatch}>
                           <FormControl>
                             <SelectTrigger data-testid="select-gasht-day">
                               <SelectValue placeholder="দিন নির্বাচন করুন" />
@@ -984,7 +990,7 @@ export default function MosqueDetailsPage() {
                       <FormItem>
                         <FormLabel>৩ দিনের সময়সূচী</FormLabel>
                         <FormControl>
-                          <Input placeholder="যেমন: প্রতি মাসের ১ম সপ্তাহ" {...field} disabled={!monthlyThreeDaysWatch} data-testid="input-three-days-schedule" />
+                          <Input placeholder="যেমন: প্রতি মাসের ১ম সপ্তাহ" {...field} disabled={!fiveTasksActive || !monthlyThreeDaysWatch} data-testid="input-three-days-schedule" />
                         </FormControl>
                       </FormItem>
                     )}

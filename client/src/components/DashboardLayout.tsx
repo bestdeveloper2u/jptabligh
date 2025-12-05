@@ -83,13 +83,45 @@ export default function DashboardLayout({
     onViewChange("dashboard");
   };
 
+  const SidebarButton = ({ item, isActive }: { item: typeof sidebarItems[0]; isActive: boolean }) => {
+    const Icon = item.icon;
+    
+    const handleClick = () => {
+      if (item.id === "settings") {
+        setLocation("/settings");
+      } else {
+        onViewChange(item.id);
+      }
+      setIsMobileSidebarOpen(false);
+    };
+
+    return (
+      <button
+        onClick={handleClick}
+        className={cn(
+          "w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all",
+          isActive
+            ? "bg-primary text-primary-foreground"
+            : "text-foreground hover-elevate",
+          isDesktopSidebarCollapsed && "md:justify-center md:px-2"
+        )}
+        data-testid={`sidebar-${item.id}`}
+      >
+        <Icon className="w-5 h-5 flex-shrink-0" />
+        <span className={cn("font-medium", isDesktopSidebarCollapsed && "md:hidden")}>
+          {item.label}
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="gradient-bg min-h-screen">
       <TopNavigation
         userName={userName}
         userRole={userRole}
         notifications={notifications}
-        onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        onMenuClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
         onLogout={onLogout}
         onNotificationClick={handleNotificationClick}
         onProfileClick={handleProfileClick}
@@ -99,50 +131,74 @@ export default function DashboardLayout({
       <div className="flex">
         <aside
           className={cn(
-            "fixed md:sticky top-[73px] left-0 h-[calc(100vh-73px)] w-64 glass border-r transition-transform duration-300 z-40",
-            isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+            "fixed md:sticky top-[73px] left-0 h-[calc(100vh-73px)] glass border-r transition-all duration-300 z-40 flex flex-col",
+            isMobileSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0",
+            isDesktopSidebarCollapsed ? "md:w-16" : "md:w-64"
           )}
         >
-          <nav className="p-4 space-y-2">
+          <nav className={cn("flex-1 p-4 space-y-2", isDesktopSidebarCollapsed && "md:p-2")}>
             {filteredItems.map((item) => {
-              const Icon = item.icon;
               const isActive = activeView === item.id;
 
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    if (item.id === "settings") {
-                      setLocation("/settings");
-                    } else {
-                      onViewChange(item.id);
-                    }
-                    setIsSidebarOpen(false);
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover-elevate"
-                  )}
-                  data-testid={`sidebar-${item.id}`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.label}</span>
-                </button>
-              );
+              if (isDesktopSidebarCollapsed) {
+                return (
+                  <Tooltip key={item.id} delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <div className="hidden md:block">
+                        <SidebarButton item={item} isActive={isActive} />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="hidden md:block">
+                      {item.label}
+                    </TooltipContent>
+                    <div className="md:hidden">
+                      <SidebarButton item={item} isActive={isActive} />
+                    </div>
+                  </Tooltip>
+                );
+              }
+
+              return <SidebarButton key={item.id} item={item} isActive={isActive} />;
             })}
           </nav>
+
+          <div className={cn("p-4 border-t hidden md:block", isDesktopSidebarCollapsed && "p-2")}>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size={isDesktopSidebarCollapsed ? "icon" : "default"}
+                  onClick={toggleDesktopSidebar}
+                  className={cn("w-full", isDesktopSidebarCollapsed ? "justify-center" : "justify-start gap-2")}
+                  data-testid="button-toggle-sidebar"
+                >
+                  {isDesktopSidebarCollapsed ? (
+                    <PanelLeft className="w-5 h-5" />
+                  ) : (
+                    <>
+                      <PanelLeftClose className="w-5 h-5" />
+                      <span>সাইডবার হাইড করুন</span>
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              {isDesktopSidebarCollapsed && (
+                <TooltipContent side="right">
+                  সাইডবার প্রদর্শন করুন
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </div>
         </aside>
 
-        {isSidebarOpen && (
+        {isMobileSidebarOpen && (
           <div
             className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
-            onClick={() => setIsSidebarOpen(false)}
+            onClick={() => setIsMobileSidebarOpen(false)}
           />
         )}
 
-        <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">
+        <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 transition-all duration-300">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>
