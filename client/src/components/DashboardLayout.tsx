@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Home, Building2, MapPin, Users, Settings, UserPlus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import TopNavigation from "./TopNavigation";
 import BottomNavigation from "./BottomNavigation";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,15 @@ export default function DashboardLayout({
   onLogout 
 }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [, setLocation] = useLocation();
+
+  const handleProfileClick = () => {
+    setLocation(`/member/${userId}`);
+  };
+
+  const handleSettingsClick = () => {
+    onViewChange("settings");
+  };
 
   const { data: myTakajasData } = useQuery<{ takajas: Takaja[] }>({
     queryKey: ["/api/takajas/my"],
@@ -68,6 +78,8 @@ export default function DashboardLayout({
         onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
         onLogout={onLogout}
         onNotificationClick={handleNotificationClick}
+        onProfileClick={handleProfileClick}
+        onSettingsClick={handleSettingsClick}
       />
 
       <div className="flex">

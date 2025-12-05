@@ -28,6 +28,8 @@ interface TopNavigationProps {
   onMenuClick?: () => void;
   onLogout?: () => void;
   onNotificationClick?: (id: string) => void;
+  onProfileClick?: () => void;
+  onSettingsClick?: () => void;
 }
 
 const roleLabels = {
@@ -55,7 +57,9 @@ export default function TopNavigation({
   notifications = [], 
   onMenuClick, 
   onLogout,
-  onNotificationClick 
+  onNotificationClick,
+  onProfileClick,
+  onSettingsClick
 }: TopNavigationProps) {
   const [isDark, setIsDark] = useState(false);
   const initials = userName.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
@@ -207,11 +211,11 @@ export default function TopNavigation({
                 <p className="text-xs text-muted-foreground">{roleLabels[userRole]}</p>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem data-testid="menu-profile">
+              <DropdownMenuItem onClick={onProfileClick} data-testid="menu-profile">
                 <User className="w-4 h-4 mr-2" />
                 প্রোফাইল দেখুন
               </DropdownMenuItem>
-              <DropdownMenuItem data-testid="menu-settings">
+              <DropdownMenuItem onClick={onSettingsClick} data-testid="menu-settings">
                 <Settings className="w-4 h-4 mr-2" />
                 সেটিংস
               </DropdownMenuItem>
